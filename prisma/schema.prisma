@@ -1,0 +1,64 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model User {
+  id             String        @id @default(cuid())
+  accounts       Account[]
+  name           String?
+  image          String?
+  discordId      String?
+  jobTitle       String?
+  email          String        @unique
+  passwordHash   String
+  secureWordHash String
+  timezone       String        @default("UTC")
+  role           String        @default("STAFF") // SQLite doesn't support enums
+  lastActive     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  activityLogs   ActivityLog[]
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  timestamp DateTime @default(now())
+}
+
+model InfoItem {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  content     String
+  type        String   // SQLite doesn't support enums
+  visibleTo   String   // SQLite doesn't support scalar lists, storing as comma-separated string
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
