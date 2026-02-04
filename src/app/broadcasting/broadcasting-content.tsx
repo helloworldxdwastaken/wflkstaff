@@ -560,22 +560,22 @@ export function BroadcastingContent() {
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
                             <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
                                 className={scheduleView === 'list' 
-                                    ? 'bg-slate-800 border-slate-600 text-white' 
-                                    : 'border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800'}
+                                    ? 'bg-slate-800 text-white' 
+                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'}
                                 onClick={() => setScheduleView('list')}
                             >
                                 <Users className="h-4 w-4 mr-1.5" />
                                 DJs
                             </Button>
                             <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
                                 className={scheduleView === 'calendar' 
-                                    ? 'bg-slate-800 border-slate-600 text-white' 
-                                    : 'border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800'}
+                                    ? 'bg-slate-800 text-white' 
+                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'}
                                 onClick={() => setScheduleView('calendar')}
                             >
                                 <CalendarDays className="h-4 w-4 mr-1.5" />
@@ -592,18 +592,18 @@ export function BroadcastingContent() {
                     </div>
                     <div className="flex items-center gap-2">
                         <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
-                            className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800"
+                            className="text-slate-400 hover:text-white hover:bg-slate-800"
                             onClick={refreshStreamers}
                             disabled={refreshing.schedule}
                         >
                             <RefreshCw className={`h-4 w-4 ${refreshing.schedule ? 'animate-spin' : ''}`} />
                         </Button>
                         <Button
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
-                            className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800"
+                            className="text-slate-400 hover:text-white hover:bg-slate-800"
                             onClick={() => setIsAddDJOpen(true)}
                         >
                             <UserPlus className="h-4 w-4 mr-1.5" />
@@ -770,9 +770,9 @@ export function BroadcastingContent() {
                                         <p className="text-slate-500 text-sm">No schedule set</p>
                                     )}
                                     <Button
-                                        variant="outline"
+                                        variant="ghost"
                                         size="sm"
-                                        className="w-full border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800"
+                                        className="w-full text-slate-400 hover:text-white hover:bg-slate-800"
                                         onClick={() => openAddSchedule(streamer)}
                                     >
                                         <Plus className="h-4 w-4 mr-2" />
@@ -862,12 +862,12 @@ export function BroadcastingContent() {
                                         <Button
                                             key={day}
                                             type="button"
-                                            variant="outline"
+                                            variant="ghost"
                                             size="sm"
                                             className={`${
                                                 scheduleForm.days.includes(idx)
-                                                    ? 'bg-slate-700 border-slate-500 text-white hover:bg-slate-600'
-                                                    : 'border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800'
+                                                    ? 'bg-slate-700 text-white hover:bg-slate-600'
+                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                             }`}
                                             onClick={() => toggleDay(idx)}
                                         >
@@ -882,17 +882,17 @@ export function BroadcastingContent() {
                         </div>
                         <DialogFooter className="mt-6">
                             <Button
-                                variant="outline"
+                                variant="ghost"
                                 onClick={() => setIsAddScheduleOpen(false)}
-                                className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800"
+                                className="text-slate-400 hover:text-white hover:bg-slate-800"
                             >
                                 Cancel
                             </Button>
                             <Button
-                                variant="outline"
+                                variant="ghost"
                                 onClick={handleAddSchedule}
                                 disabled={submitting || scheduleForm.days.length === 0}
-                                className="border-slate-600 bg-slate-800 text-slate-200 hover:text-white hover:bg-slate-700"
+                                className="bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700"
                             >
                                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                                 Add Schedule
@@ -942,11 +942,11 @@ export function BroadcastingContent() {
                             <div className="flex items-center gap-3">
                                 <Button
                                     type="button"
-                                    variant="outline"
+                                    variant="ghost"
                                     size="sm"
                                     className={djForm.isActive 
-                                        ? 'bg-slate-700 border-emerald-600 text-emerald-400 hover:bg-slate-600' 
-                                        : 'border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800'}
+                                        ? 'bg-slate-700 text-emerald-400 hover:bg-slate-600' 
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'}
                                     onClick={() => setDJForm(f => ({ ...f, isActive: !f.isActive }))}
                                 >
                                     {djForm.isActive ? 'Active' : 'Inactive'}
@@ -958,20 +958,20 @@ export function BroadcastingContent() {
                         </div>
                         <DialogFooter className="mt-6">
                             <Button
-                                variant="outline"
+                                variant="ghost"
                                 onClick={() => {
                                     setIsAddDJOpen(false)
                                     setDJForm({ username: '', password: '', displayName: '', isActive: true })
                                 }}
-                                className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800"
+                                className="text-slate-400 hover:text-white hover:bg-slate-800"
                             >
                                 Cancel
                             </Button>
                             <Button
-                                variant="outline"
+                                variant="ghost"
                                 onClick={handleAddDJ}
                                 disabled={submitting || !djForm.username || !djForm.password}
-                                className="border-slate-600 bg-slate-800 text-slate-200 hover:text-white hover:bg-slate-700"
+                                className="bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700"
                             >
                                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                                 Add DJ
@@ -1011,11 +1011,11 @@ export function BroadcastingContent() {
                             <div className="flex items-center gap-3">
                                 <Button
                                     type="button"
-                                    variant="outline"
+                                    variant="ghost"
                                     size="sm"
                                     className={djForm.isActive 
-                                        ? 'bg-slate-700 border-emerald-600 text-emerald-400 hover:bg-slate-600' 
-                                        : 'border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800'}
+                                        ? 'bg-slate-700 text-emerald-400 hover:bg-slate-600' 
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'}
                                     onClick={() => setDJForm(f => ({ ...f, isActive: !f.isActive }))}
                                 >
                                     {djForm.isActive ? 'Active' : 'Inactive'}
@@ -1027,21 +1027,21 @@ export function BroadcastingContent() {
                         </div>
                         <DialogFooter className="mt-6">
                             <Button
-                                variant="outline"
+                                variant="ghost"
                                 onClick={() => {
                                     setIsEditDJOpen(false)
                                     setEditingDJ(null)
                                     setDJForm({ username: '', password: '', displayName: '', isActive: true })
                                 }}
-                                className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800"
+                                className="text-slate-400 hover:text-white hover:bg-slate-800"
                             >
                                 Cancel
                             </Button>
                             <Button
-                                variant="outline"
+                                variant="ghost"
                                 onClick={handleEditDJ}
                                 disabled={submitting}
-                                className="border-slate-600 bg-slate-800 text-slate-200 hover:text-white hover:bg-slate-700"
+                                className="bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700"
                             >
                                 {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                                 Save Changes
@@ -1061,9 +1061,9 @@ export function BroadcastingContent() {
                         )}
                     </div>
                     <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800"
+                        className="text-slate-400 hover:text-white hover:bg-slate-800"
                         onClick={refreshBroadcasts}
                         disabled={refreshing.history}
                     >
