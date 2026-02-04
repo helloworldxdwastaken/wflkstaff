@@ -328,19 +328,19 @@ export function ResourcesTabs({ links, secrets, files, allItems }: ResourcesTabs
             {/* Tabs */}
             <Tabs defaultValue="all" className="space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <TabsList className="bg-slate-900 border border-slate-800">
-                        <TabsTrigger value="all" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">
+                    <TabsList className="bg-slate-900/50 border border-slate-800">
+                        <TabsTrigger value="all" className="text-slate-400 hover:text-white data-[state=active]:bg-white data-[state=active]:text-black">
                             All ({allItems.length})
                         </TabsTrigger>
-                        <TabsTrigger value="links" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">
+                        <TabsTrigger value="links" className="text-slate-400 hover:text-white data-[state=active]:bg-white data-[state=active]:text-black">
                             <Globe className="h-4 w-4 mr-1.5" />
                             Links ({links.length})
                         </TabsTrigger>
-                        <TabsTrigger value="secrets" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">
+                        <TabsTrigger value="secrets" className="text-slate-400 hover:text-white data-[state=active]:bg-white data-[state=active]:text-black">
                             <Key className="h-4 w-4 mr-1.5" />
                             Secrets ({secrets.length})
                         </TabsTrigger>
-                        <TabsTrigger value="files" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">
+                        <TabsTrigger value="files" className="text-slate-400 hover:text-white data-[state=active]:bg-white data-[state=active]:text-black">
                             <File className="h-4 w-4 mr-1.5" />
                             Files ({files.length})
                         </TabsTrigger>

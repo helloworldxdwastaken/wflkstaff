@@ -185,10 +185,10 @@ export function StatsContent() {
                     <Tabs defaultValue="daily" className="w-full">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
                             <h2 className="text-base sm:text-lg font-medium text-slate-200">Listener Trends</h2>
-                            <TabsList className="bg-slate-900 border border-slate-800 self-start">
-                                <TabsTrigger value="daily" className="text-xs sm:text-sm">Daily</TabsTrigger>
-                                <TabsTrigger value="weekly" className="text-xs sm:text-sm">Weekly</TabsTrigger>
-                                <TabsTrigger value="hourly" className="text-xs sm:text-sm">Hourly</TabsTrigger>
+                            <TabsList className="bg-slate-900/50 border border-slate-800 self-start">
+                                <TabsTrigger value="daily" className="text-xs sm:text-sm text-slate-400 hover:text-white data-[state=active]:bg-white data-[state=active]:text-black">Daily</TabsTrigger>
+                                <TabsTrigger value="weekly" className="text-xs sm:text-sm text-slate-400 hover:text-white data-[state=active]:bg-white data-[state=active]:text-black">Weekly</TabsTrigger>
+                                <TabsTrigger value="hourly" className="text-xs sm:text-sm text-slate-400 hover:text-white data-[state=active]:bg-white data-[state=active]:text-black">Hourly</TabsTrigger>
                             </TabsList>
                         </div>
 
