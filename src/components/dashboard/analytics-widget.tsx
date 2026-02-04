@@ -172,7 +172,7 @@ export function AnalyticsWidget() {
                                             fontSize: '11px',
                                             padding: '4px 8px'
                                         }}
-                                        formatter={(value: number) => [value.toLocaleString(), 'Sessions']}
+                                        formatter={(value) => [typeof value === 'number' ? value.toLocaleString() : '0', 'Sessions']}
                                         labelFormatter={(label) => formatDate(label)}
                                     />
                                 </AreaChart>
