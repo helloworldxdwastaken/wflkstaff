@@ -9,7 +9,7 @@ interface NowPlayingData {
     now_playing: {
         song: { title: string; artist: string; art: string }
     }
-    listeners: { current: number }
+    listeners: { current: number; unique: number }
 }
 
 export function LiveStatusWidget() {
@@ -91,9 +91,13 @@ export function LiveStatusWidget() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-1.5 text-slate-400">
+                    <div className="flex items-center gap-2 text-slate-400">
                         <Users className="h-4 w-4" />
-                        <span className="text-sm font-medium">{data.listeners.current}</span>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium text-white">{data.listeners.current}</span>
+                            <span className="text-xs text-slate-500">/</span>
+                            <span className="text-sm text-slate-400">{data.listeners.unique}</span>
+                        </div>
                     </div>
                     <ArrowRight className="h-4 w-4 text-slate-600 group-hover:text-slate-400 transition-colors" />
                 </div>

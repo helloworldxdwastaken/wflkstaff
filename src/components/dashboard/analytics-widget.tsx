@@ -21,7 +21,8 @@ interface HistoricalData {
 
 export function AnalyticsWidget() {
     const [data, setData] = useState<HistoricalData | null>(null)
-    const [liveListeners, setLiveListeners] = useState<number>(0)
+    const [currentListeners, setCurrentListeners] = useState<number>(0)
+    const [uniqueListeners, setUniqueListeners] = useState<number>(0)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -39,7 +40,8 @@ export function AnalyticsWidget() {
 
                 if (liveRes.ok) {
                     const live = await liveRes.json()
-                    setLiveListeners(live.total_listeners || 0)
+                    setCurrentListeners(live.current_listeners || live.total_listeners || 0)
+                    setUniqueListeners(live.unique_listeners || live.total_listeners || 0)
                 }
             } catch (err) {
                 console.error('Failed to fetch analytics:', err)
@@ -56,7 +58,8 @@ export function AnalyticsWidget() {
                 const liveRes = await fetch('/api/azuracast/listeners')
                 if (liveRes.ok) {
                     const live = await liveRes.json()
-                    setLiveListeners(live.total_listeners || 0)
+                    setCurrentListeners(live.current_listeners || live.total_listeners || 0)
+                    setUniqueListeners(live.unique_listeners || live.total_listeners || 0)
                 }
             } catch (e) {
                 // Silent fail
@@ -110,10 +113,14 @@ export function AnalyticsWidget() {
                             <Headphones className="h-4 w-4 text-emerald-400" />
                         </div>
                         <div>
-                            <p className="text-lg font-bold text-white">{liveListeners}</p>
-                            <p className="text-[10px] text-slate-500 uppercase">Live Now</p>
+                            <div className="flex items-baseline gap-1">
+                                <p className="text-lg font-bold text-white">{currentListeners}</p>
+                                <span className="text-xs text-slate-500">/</span>
+                                <p className="text-sm text-slate-400">{uniqueListeners}</p>
+                            </div>
+                            <p className="text-[10px] text-slate-500 uppercase">Current / Unique</p>
                         </div>
-                        {liveListeners > 0 && (
+                        {currentListeners > 0 && (
                             <span className="ml-auto w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         )}
                     </CardContent>

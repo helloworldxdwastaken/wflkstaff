@@ -45,7 +45,7 @@ interface Broadcast {
     id: number
     streamer_id: number
     streamer_name: string
-    timestamp_start: number
+    timestamp_start: number | null
     timestamp_end: number | null
     recording: any
 }
@@ -59,11 +59,23 @@ function formatTime(seconds: number): string {
 }
 
 function formatDuration(startTimestamp: number | null, endTimestamp: number | null): string {
-    if (!startTimestamp) return 'Unknown'
-    if (!endTimestamp) return 'Ongoing'
+    // Check for invalid start timestamp
+    if (!startTimestamp || startTimestamp <= 0 || isNaN(startTimestamp)) return 'Unknown'
+    // Check for missing end (ongoing broadcast)
+    if (!endTimestamp || endTimestamp <= 0) return 'Ongoing'
+    
     const durationSeconds = endTimestamp - startTimestamp
+    
+    // Validate the duration is a positive number
+    if (isNaN(durationSeconds) || durationSeconds < 0) return 'Unknown'
+    if (durationSeconds === 0) return '0m'
+    
     const hours = Math.floor(durationSeconds / 3600)
     const minutes = Math.floor((durationSeconds % 3600) / 60)
+    
+    // Handle edge case where minutes might be NaN
+    if (isNaN(hours) || isNaN(minutes)) return 'Unknown'
+    
     if (hours > 0) {
         return `${hours}h ${minutes}m`
     }
@@ -71,9 +83,11 @@ function formatDuration(startTimestamp: number | null, endTimestamp: number | nu
 }
 
 function formatDate(timestamp: number | null): string {
-    if (!timestamp) return 'Unknown date'
+    if (!timestamp || timestamp <= 0 || isNaN(timestamp)) return 'Unknown date'
     const date = new Date(timestamp * 1000)
     if (isNaN(date.getTime())) return 'Unknown date'
+    // Sanity check - if the date is before 2000 or after 2100, it's probably invalid
+    if (date.getFullYear() < 2000 || date.getFullYear() > 2100) return 'Unknown date'
     return date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -84,24 +98,26 @@ function formatDate(timestamp: number | null): string {
 }
 
 function formatTimeRange(startTimestamp: number | null, endTimestamp: number | null): string {
-    if (!startTimestamp) return 'Unknown'
+    if (!startTimestamp || startTimestamp <= 0 || isNaN(startTimestamp)) return 'Unknown'
     const startDate = new Date(startTimestamp * 1000)
-    if (isNaN(startDate.getTime())) return 'Unknown'
+    if (isNaN(startDate.getTime()) || startDate.getFullYear() < 2000) return 'Unknown'
     
     const startTime = startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     
-    if (!endTimestamp) return `${startTime} - Ongoing`
+    if (!endTimestamp || endTimestamp <= 0) return `${startTime} - Ongoing`
     
     const endDate = new Date(endTimestamp * 1000)
+    if (isNaN(endDate.getTime())) return `${startTime} - Ongoing`
+    
     const endTime = endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     
     return `${startTime} - ${endTime}`
 }
 
 function getRelativeDate(timestamp: number | null): string {
-    if (!timestamp) return ''
+    if (!timestamp || timestamp <= 0 || isNaN(timestamp)) return ''
     const date = new Date(timestamp * 1000)
-    if (isNaN(date.getTime())) return ''
+    if (isNaN(date.getTime()) || date.getFullYear() < 2000) return ''
     
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -112,7 +128,7 @@ function getRelativeDate(timestamp: number | null): string {
     if (broadcastDate.getTime() === yesterday.getTime()) return 'Yesterday'
     
     const diffDays = Math.floor((today.getTime() - broadcastDate.getTime()) / (24 * 60 * 60 * 1000))
-    if (diffDays < 7) return `${diffDays} days ago`
+    if (diffDays > 0 && diffDays < 7) return `${diffDays} days ago`
     
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
@@ -772,7 +788,7 @@ export function BroadcastingContent() {
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="w-full text-slate-400 hover:text-white hover:bg-slate-800"
+                                        className="w-full text-slate-300 bg-slate-800/50 border border-slate-700/50 hover:text-white hover:bg-slate-700 hover:border-slate-600"
                                         onClick={() => openAddSchedule(streamer)}
                                     >
                                         <Plus className="h-4 w-4 mr-2" />

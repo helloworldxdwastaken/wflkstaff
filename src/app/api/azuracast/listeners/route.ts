@@ -13,35 +13,43 @@ export async function GET() {
   }
 
   try {
-    // 1. Fetch Current Listeners (Live)
-    // Endpoint: /station/{station_id}/listeners
-    const listenersResponse = await fetch(`${API_URL}/station/${STATION_ID}/listeners`, {
-      headers: {
-        'Authorization': `Bearer ${API_KEY}`,
-        'Accept': 'application/json'
-      },
-      next: { revalidate: 30 } // Cache for 30 seconds
-    });
+    // Fetch both listeners list and nowplaying data in parallel
+    const [listenersResponse, nowPlayingResponse] = await Promise.all([
+      fetch(`${API_URL}/station/${STATION_ID}/listeners`, {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Accept': 'application/json'
+        },
+        next: { revalidate: 30 }
+      }),
+      fetch(`${API_URL}/nowplaying/${STATION_ID}`, {
+        headers: {
+          'Accept': 'application/json'
+        },
+        next: { revalidate: 15 }
+      })
+    ]);
 
     if (!listenersResponse.ok) {
       throw new Error(`AzuraCast API Error: ${listenersResponse.statusText}`);
     }
 
     const listenersData = await listenersResponse.json();
-
-    // 2. Fetch Station Summary (for total unique/concurrent if available in a summary)
-    // Often /nowplaying or /station/{id} has this. Let's stick to listeners for now.
     
-    // Process Data for Frontend
-    // The AzuraCast listeners endpoint returns an array of listener objects:
-    // [{ ip: "...", user_agent: "...", connected_time: 123, location: {...} }, ...]
+    // Get current and unique from nowplaying if available
+    let currentListeners = listenersData.length;
+    let uniqueListeners = listenersData.length;
     
-    // We need to transform this into the shape expected by the dashboard 
-    // OR return raw data and let dashboard handle it.
-    // Returning processed data is safer to match existing UI.
+    if (nowPlayingResponse.ok) {
+      const nowPlayingData = await nowPlayingResponse.json();
+      currentListeners = nowPlayingData.listeners?.current ?? listenersData.length;
+      uniqueListeners = nowPlayingData.listeners?.unique ?? listenersData.length;
+    }
 
     return NextResponse.json({
-        total_listeners: listenersData.length,
+        total_listeners: currentListeners,
+        current_listeners: currentListeners,
+        unique_listeners: uniqueListeners,
         listeners: listenersData
     });
 

@@ -37,12 +37,15 @@ function getWeeklyData(dailyHits: { date: string, hits: number }[]) {
 
 interface LiveData {
     total_listeners: number
+    current_listeners: number
+    unique_listeners: number
     listeners: any[]
 }
 
 export function StatsContent() {
     const [historicalData, setHistoricalData] = useState<HistoricalData | null>(null)
-    const [liveListeners, setLiveListeners] = useState<number>(0)
+    const [currentListeners, setCurrentListeners] = useState<number>(0)
+    const [uniqueListeners, setUniqueListeners] = useState<number>(0)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
@@ -65,7 +68,8 @@ export function StatsContent() {
                 // Live data is optional - don't fail if AzuraCast is down
                 if (liveRes.ok) {
                     const live: LiveData = await liveRes.json()
-                    setLiveListeners(live.total_listeners || 0)
+                    setCurrentListeners(live.current_listeners || live.total_listeners || 0)
+                    setUniqueListeners(live.unique_listeners || live.total_listeners || 0)
                 }
 
             } catch (err: any) {
@@ -84,7 +88,8 @@ export function StatsContent() {
                 const liveRes = await fetch('/api/azuracast/listeners')
                 if (liveRes.ok) {
                     const live: LiveData = await liveRes.json()
-                    setLiveListeners(live.total_listeners || 0)
+                    setCurrentListeners(live.current_listeners || live.total_listeners || 0)
+                    setUniqueListeners(live.unique_listeners || live.total_listeners || 0)
                 }
             } catch (e) {
                 // Silent fail for live updates
@@ -129,7 +134,7 @@ export function StatsContent() {
                     </h1>
                     <p className="text-slate-400 flex items-center gap-2 text-sm sm:text-base">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        {liveListeners > 0 ? `${liveListeners} listening now` : 'Historical Data (January 2026)'}
+                        {currentListeners > 0 ? `${currentListeners} current / ${uniqueListeners} unique listening now` : 'Historical Data (January 2026)'}
                     </p>
                 </div>
             </header>
@@ -142,8 +147,12 @@ export function StatsContent() {
                         <Headphones className="h-4 w-4 text-emerald-400 hidden sm:block" />
                     </CardHeader>
                     <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-                        <div className="text-xl sm:text-2xl font-bold text-white">{liveListeners.toLocaleString()}</div>
-                        <p className="text-xs text-slate-500">Current listeners</p>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-xl sm:text-2xl font-bold text-white">{currentListeners.toLocaleString()}</span>
+                            <span className="text-sm text-slate-500">/</span>
+                            <span className="text-lg text-slate-400">{uniqueListeners.toLocaleString()}</span>
+                        </div>
+                        <p className="text-xs text-slate-500">Current / Unique</p>
                     </CardContent>
                 </Card>
                 <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm">
