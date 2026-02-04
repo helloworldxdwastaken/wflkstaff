@@ -15,8 +15,12 @@ export async function authenticate(
 ) {
     try {
         await signIn('credentials', formData)
-    } catch (error) {
-        if ((error as any).type === 'CredentialsSignin') {
+    } catch (error: any) {
+        // NextAuth throws a NEXT_REDIRECT on successful login - let it through
+        if (error?.digest?.includes('NEXT_REDIRECT')) {
+            throw error
+        }
+        if (error?.type === 'CredentialsSignin') {
             return 'Invalid credentials or secure word.'
         }
         return 'Something went wrong.'

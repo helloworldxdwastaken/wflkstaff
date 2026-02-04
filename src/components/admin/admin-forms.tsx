@@ -1,14 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { createStaffUser, createInfoItem, deleteUser } from '@/lib/actions'
+import { createStaffUser, deleteUser } from '@/lib/actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useFormStatus } from 'react-dom'
-import { Trash2, UserPlus, FilePlus } from 'lucide-react'
+import { Trash2, UserPlus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { TIMEZONES } from '@/lib/timezones'
 
 function SubmitButton({ label }: { label: string }) {
     const { pending } = useFormStatus()
@@ -38,7 +39,7 @@ export function CreateUserForm() {
             </CardHeader>
             <CardContent>
                 <form action={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="name" className="text-slate-200">Name</Label>
                             <Input id="name" name="name" placeholder="John Doe" required className="bg-slate-800/50 border-slate-700 text-slate-100" />
@@ -56,7 +57,7 @@ export function CreateUserForm() {
                         <Label htmlFor="secureWord" className="text-amber-400">Secure Word</Label>
                         <Input id="secureWord" name="secureWord" type="text" required className="bg-slate-800/50 border-amber-900/40 text-slate-100" />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="role" className="text-slate-200">Role</Label>
                             <select id="role" name="role" className="w-full h-10 rounded-md border border-slate-700 bg-slate-800 text-slate-100 px-3 py-2 text-sm">
@@ -68,7 +69,7 @@ export function CreateUserForm() {
                             <Label htmlFor="jobTitle" className="text-slate-200">Job Title</Label>
                             <Input id="jobTitle" name="jobTitle" placeholder="Staff Member" className="bg-slate-800/50 border-slate-700 text-slate-100" />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-2 sm:col-span-2">
                             <Label htmlFor="timezone" className="text-slate-200">Timezone</Label>
                             <select
                                 id="timezone"
@@ -76,17 +77,11 @@ export function CreateUserForm() {
                                 defaultValue="America/New_York"
                                 className="w-full h-10 rounded-md border border-slate-700 bg-slate-800 text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
-                                <option value="UTC">Universal Time, UTC</option>
-                                <option value="America/New_York">USA, New York</option>
-                                <option value="America/Chicago">USA, Chicago</option>
-                                <option value="America/Denver">USA, Denver</option>
-                                <option value="America/Los_Angeles">USA, Los Angeles</option>
-                                <option value="Europe/London">UK, London</option>
-                                <option value="Europe/Paris">France, Paris</option>
-                                <option value="Asia/Jerusalem">Israel, Tel Aviv</option>
-                                <option value="Asia/Tokyo">Japan, Tokyo</option>
-                                <option value="Asia/Singapore">Singapore, Singapore</option>
-                                <option value="Australia/Sydney">Australia, Sydney</option>
+                                {TIMEZONES.map((tz) => (
+                                    <option key={tz.value} value={tz.value}>
+                                        (UTC{tz.offset}) {tz.label}
+                                    </option>
+                                ))}
                             </select>
                         </div>
                     </div>
@@ -97,8 +92,6 @@ export function CreateUserForm() {
         </Card>
     )
 }
-
-
 
 export function DeleteUserButton({ userId }: { userId: string }) {
     const router = useRouter()

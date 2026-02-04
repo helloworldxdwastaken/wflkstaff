@@ -27,21 +27,24 @@ model Account {
 }
 
 model User {
-  id             String        @id @default(cuid())
+  id             String         @id @default(cuid())
   accounts       Account[]
   name           String?
   image          String?
   discordId      String?
   jobTitle       String?
-  email          String        @unique
+  email          String         @unique
   passwordHash   String
   secureWordHash String
-  timezone       String        @default("UTC")
-  role           String        @default("STAFF") // SQLite doesn't support enums
+  timezone       String         @default("UTC")
+  role           String         @default("STAFF") // SQLite doesn't support enums
   lastActive     DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
   activityLogs   ActivityLog[]
+  polls          Poll[]         @relation("PollCreator")
+  votes          Vote[]
+  notifications  Notification[]
 }
 
 model ActivityLog {
@@ -61,4 +64,51 @@ model InfoItem {
   visibleTo   String   // SQLite doesn't support scalar lists, storing as comma-separated string
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Poll {
+  id          String       @id @default(cuid())
+  question    String
+  description String?
+  createdById String
+  createdBy   User         @relation("PollCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  options     PollOption[]
+  votes       Vote[]
+  isActive    Boolean      @default(true)
+  expiresAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model PollOption {
+  id     String @id @default(cuid())
+  text   String
+  pollId String
+  poll   Poll   @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes  Vote[]
+}
+
+model Vote {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pollId    String
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  optionId  String
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@unique([userId, pollId]) // One vote per user per poll
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // POLL_CREATED, POLL_REMINDER, etc.
+  title     String
+  message   String
+  link      String?  // Link to the relevant page
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

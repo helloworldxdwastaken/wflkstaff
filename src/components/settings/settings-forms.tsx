@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useFormStatus } from 'react-dom'
-import { Settings, Lock, Globe } from 'lucide-react'
+import { Lock, Globe } from 'lucide-react'
+import { TIMEZONES } from '@/lib/timezones'
 
 function SubmitButton({ label }: { label: string }) {
     const { pending } = useFormStatus()
@@ -27,7 +28,6 @@ export function SettingsForm({ user }: { user: any }) {
         setMessage(res.message)
         if (res.success) {
             setSuccess(true)
-            // Optional: reset sensitive fields
         }
     }
 
@@ -51,7 +51,7 @@ export function SettingsForm({ user }: { user: any }) {
                                 name="name"
                                 placeholder="Your Name"
                                 defaultValue={user.name || ''}
-                                className="bg-slate-800/50 border-slate-700 text-slate-100 max-w-md"
+                                className="bg-slate-800/50 border-slate-700 text-slate-100 w-full sm:max-w-md"
                             />
                         </div>
                         <div className="space-y-2">
@@ -61,7 +61,7 @@ export function SettingsForm({ user }: { user: any }) {
                                 name="jobTitle"
                                 placeholder="e.g. Morning Host"
                                 defaultValue={user.jobTitle || ''}
-                                className="bg-slate-800/50 border-slate-700 text-slate-100 max-w-md"
+                                className="bg-slate-800/50 border-slate-700 text-slate-100 w-full sm:max-w-md"
                             />
                         </div>
                         <div className="space-y-2">
@@ -70,27 +70,13 @@ export function SettingsForm({ user }: { user: any }) {
                                 id="timezone"
                                 name="timezone"
                                 defaultValue={user.timezone}
-                                className="w-full h-10 rounded-md border border-slate-700 bg-slate-800 text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="w-full sm:max-w-md h-10 rounded-md border border-slate-700 bg-slate-800 text-slate-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             >
-                                <option value="UTC">Universal Time, UTC</option>
-                                <option value="America/New_York">USA, New York</option>
-                                <option value="America/Chicago">USA, Chicago</option>
-                                <option value="America/Denver">USA, Denver</option>
-                                <option value="America/Los_Angeles">USA, Los Angeles</option>
-                                <option value="America/Anchorage">USA, Anchorage</option>
-                                <option value="Pacific/Honolulu">USA, Honolulu</option>
-                                <option value="Europe/London">UK, London</option>
-                                <option value="Europe/Paris">France, Paris</option>
-                                <option value="Europe/Berlin">Germany, Berlin</option>
-                                <option value="Europe/Kiev">Ukraine, Kyiv</option>
-                                <option value="Asia/Dubai">UAE, Dubai</option>
-                                <option value="Asia/Tokyo">Japan, Tokyo</option>
-                                <option value="Asia/Seoul">South Korea, Seoul</option>
-                                <option value="Asia/Shanghai">China, Shanghai</option>
-                                <option value="Asia/Singapore">Singapore, Singapore</option>
-                                <option value="Asia/Jerusalem">Israel, Tel Aviv</option>
-                                <option value="Australia/Sydney">Australia, Sydney</option>
-                                <option value="Pacific/Auckland">New Zealand, Auckland</option>
+                                {TIMEZONES.map((tz) => (
+                                    <option key={tz.value} value={tz.value}>
+                                        (UTC{tz.offset}) {tz.label}
+                                    </option>
+                                ))}
                             </select>
                             <p className="text-xs text-slate-500">Select your local timezone.</p>
                         </div>
@@ -117,7 +103,7 @@ export function SettingsForm({ user }: { user: any }) {
                                 id="currentPassword"
                                 name="currentPassword"
                                 type="password"
-                                className="bg-slate-800/50 border-slate-700 text-slate-100 max-w-md"
+                                className="bg-slate-800/50 border-slate-700 text-slate-100 w-full sm:max-w-md"
                             />
                         </div>
                         <div className="space-y-2">
@@ -126,7 +112,7 @@ export function SettingsForm({ user }: { user: any }) {
                                 id="newSecureWord"
                                 name="newSecureWord"
                                 type="password"
-                                className="bg-slate-800/50 border-amber-900/40 text-slate-100 max-w-md"
+                                className="bg-slate-800/50 border-amber-900/40 text-slate-100 w-full sm:max-w-md"
                             />
                         </div>
                         <SubmitButton label="Change Secure Word" />
@@ -155,7 +141,7 @@ export function SettingsForm({ user }: { user: any }) {
                                 name="discordId"
                                 placeholder="e.g. 198273645091827364"
                                 defaultValue={user.discordId || ''}
-                                className="bg-slate-800/50 border-[#5865F2]/30 text-slate-100 max-w-md focus:border-[#5865F2]"
+                                className="bg-slate-800/50 border-[#5865F2]/30 text-slate-100 w-full sm:max-w-md focus:border-[#5865F2]"
                             />
                             <p className="text-xs text-slate-500">
                                 Developer Mode must be enabled on Discord to copy your ID. (Right click user &gt; Copy User ID)

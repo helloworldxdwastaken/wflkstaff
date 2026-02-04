@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { auth, signOut } from "@/auth"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, Users, LayoutDashboard, Shield } from "lucide-react"
+import { LogOut, Settings, LayoutDashboard, Shield } from "lucide-react"
 
 export async function MainNav() {
     const session = await auth()

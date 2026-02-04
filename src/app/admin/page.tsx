@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { CreateUserForm, DeleteUserButton } from "@/components/admin/admin-forms"
 import { SideNav } from "@/components/side-nav"
+import { handleSignOut } from "@/actions/auth-actions"
+import { getUnreadNotificationCount } from "@/lib/notifications"
 
 async function getUsers() {
     return prisma.user.findMany({ orderBy: { createdAt: 'desc' } })
@@ -27,76 +29,121 @@ export default async function AdminPage() {
 
     const users = await getUsers()
     const logs = await getLogs()
-
+    const notificationCount = await getUnreadNotificationCount(session.user.id!)
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100">
-            <SideNav />
+            <SideNav 
+                user={{
+                    name: session?.user?.name,
+                    email: session?.user?.email,
+                    role: session?.user?.role
+                }}
+                signOutAction={handleSignOut}
+                notificationCount={notificationCount}
+            />
 
-            <main className="pl-64">
-                <div className="p-8">
-                    <h1 className="text-3xl font-bold mb-8 text-white">Admin Control Center</h1>
+            {/* Main content with responsive padding */}
+            <main className="lg:pl-64 pt-16 lg:pt-0">
+                <div className="p-4 sm:p-6 lg:p-8">
+                    <h1 className="text-2xl sm:text-3xl font-bold mb-6 lg:mb-8 text-white">Admin Control Center</h1>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <div className="grid grid-cols-1 gap-6 lg:gap-8 mb-6 lg:mb-8">
                         <CreateUserForm />
                     </div>
 
-                    <div className="grid gap-8">
+                    <div className="grid gap-6 lg:gap-8">
                         <Card className="bg-slate-900 border-slate-800">
-                            <CardHeader>
+                            <CardHeader className="p-4 sm:p-6">
                                 <CardTitle className="text-slate-100">User Management</CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="border-slate-800 hover:bg-transparent">
-                                            <TableHead className="text-slate-400">Name</TableHead>
-                                            <TableHead className="text-slate-400">Email</TableHead>
-                                            <TableHead className="text-slate-400">Role</TableHead>
-                                            <TableHead className="text-slate-400">Timezone</TableHead>
-                                            <TableHead className="text-slate-400">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {users.map((user: any) => (
-                                            <TableRow key={user.id} className="border-slate-800 hover:bg-slate-800/50">
-                                                <TableCell className="font-medium text-slate-200">{user.name}</TableCell>
-                                                <TableCell className="text-slate-400">{user.email}</TableCell>
-                                                <TableCell><span className="bg-indigo-900/40 text-indigo-300 px-2 py-1 rounded text-xs">{user.role}</span></TableCell>
-                                                <TableCell className="text-slate-400">{user.timezone}</TableCell>
-                                                <TableCell>
-                                                    <DeleteUserButton userId={user.id} />
-                                                </TableCell>
+                            <CardContent className="p-0 sm:p-6 sm:pt-0">
+                                {/* Mobile card view */}
+                                <div className="sm:hidden space-y-3 p-4 pt-0">
+                                    {users.map((user: any) => (
+                                        <div key={user.id} className="bg-slate-800/50 rounded-lg p-4 space-y-2">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="font-medium text-slate-200">{user.name}</p>
+                                                    <p className="text-sm text-slate-400">{user.email}</p>
+                                                </div>
+                                                <DeleteUserButton userId={user.id} />
+                                            </div>
+                                            <div className="flex gap-2 flex-wrap">
+                                                <span className="bg-indigo-900/40 text-indigo-300 px-2 py-1 rounded text-xs">{user.role}</span>
+                                                <span className="text-xs text-slate-500 px-2 py-1 bg-slate-800 rounded">{user.timezone}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                {/* Desktop table view */}
+                                <div className="hidden sm:block overflow-x-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="border-slate-800 hover:bg-transparent">
+                                                <TableHead className="text-slate-400">Name</TableHead>
+                                                <TableHead className="text-slate-400">Email</TableHead>
+                                                <TableHead className="text-slate-400">Role</TableHead>
+                                                <TableHead className="text-slate-400">Timezone</TableHead>
+                                                <TableHead className="text-slate-400">Actions</TableHead>
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {users.map((user: any) => (
+                                                <TableRow key={user.id} className="border-slate-800 hover:bg-slate-800/50">
+                                                    <TableCell className="font-medium text-slate-200">{user.name}</TableCell>
+                                                    <TableCell className="text-slate-400">{user.email}</TableCell>
+                                                    <TableCell><span className="bg-indigo-900/40 text-indigo-300 px-2 py-1 rounded text-xs">{user.role}</span></TableCell>
+                                                    <TableCell className="text-slate-400">{user.timezone}</TableCell>
+                                                    <TableCell>
+                                                        <DeleteUserButton userId={user.id} />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             </CardContent>
                         </Card>
 
                         <Card className="bg-slate-900 border-slate-800">
-                            <CardHeader>
+                            <CardHeader className="p-4 sm:p-6">
                                 <CardTitle className="text-slate-100">Recent Activity</CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="border-slate-800 hover:bg-transparent">
-                                            <TableHead className="text-slate-400">User</TableHead>
-                                            <TableHead className="text-slate-400">Action</TableHead>
-                                            <TableHead className="text-slate-400">Time</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {logs.map((log: any) => (
-                                            <TableRow key={log.id} className="border-slate-800 hover:bg-slate-800/50">
-                                                <TableCell className="font-medium text-slate-200">{log.user.name || log.user.email}</TableCell>
-                                                <TableCell className="text-slate-400">{log.action}</TableCell>
-                                                <TableCell className="text-slate-500 text-xs">{log.timestamp.toLocaleString()}</TableCell>
+                            <CardContent className="p-0 sm:p-6 sm:pt-0">
+                                {/* Mobile card view */}
+                                <div className="sm:hidden space-y-3 p-4 pt-0">
+                                    {logs.map((log: any) => (
+                                        <div key={log.id} className="bg-slate-800/50 rounded-lg p-4">
+                                            <div className="flex justify-between items-start">
+                                                <p className="font-medium text-slate-200">{log.user.name || log.user.email}</p>
+                                                <p className="text-slate-500 text-xs">{log.timestamp.toLocaleString()}</p>
+                                            </div>
+                                            <p className="text-slate-400 text-sm mt-1">{log.action}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                {/* Desktop table view */}
+                                <div className="hidden sm:block overflow-x-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="border-slate-800 hover:bg-transparent">
+                                                <TableHead className="text-slate-400">User</TableHead>
+                                                <TableHead className="text-slate-400">Action</TableHead>
+                                                <TableHead className="text-slate-400">Time</TableHead>
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {logs.map((log: any) => (
+                                                <TableRow key={log.id} className="border-slate-800 hover:bg-slate-800/50">
+                                                    <TableCell className="font-medium text-slate-200">{log.user.name || log.user.email}</TableCell>
+                                                    <TableCell className="text-slate-400">{log.action}</TableCell>
+                                                    <TableCell className="text-slate-500 text-xs">{log.timestamp.toLocaleString()}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             </CardContent>
                         </Card>
                     </div>

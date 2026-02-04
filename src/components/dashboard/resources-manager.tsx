@@ -173,7 +173,7 @@ export function ResourcesManager({ items, userId }: { items: any[], userId: stri
                         </CardHeader>
                         <CardContent className="pt-0">
                             <div className="bg-slate-950/50 rounded p-2.5 flex items-center justify-between group/input border border-slate-800/50">
-                                <code className="text-xs text-slate-400 font-mono truncate max-w-[180px]">
+                                <code className="text-xs text-slate-400 font-mono truncate max-w-[120px] sm:max-w-[180px]">
                                     {item.type === 'SECRET' ? '••••••••••••' : item.content}
                                 </code>
                                 <div className="flex gap-1">
