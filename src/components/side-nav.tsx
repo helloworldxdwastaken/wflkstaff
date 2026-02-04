@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { LogOut, Settings, LayoutDashboard, Shield, Radio, Menu, X, Vote, FolderOpen } from "lucide-react"
+import { LogOut, Settings, LayoutDashboard, Shield, Radio, Menu, X, Vote, FolderOpen, Mic } from "lucide-react"
 import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 
@@ -40,6 +40,7 @@ export function SideNav({ user, signOutAction, notificationCount = 0 }: SideNavP
 
     const navLinks = [
         { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard", badge: 0 },
+        { href: "/broadcasting", icon: Mic, label: "Broadcasting", badge: 0 },
         { href: "/polls", icon: Vote, label: "Polls", badge: notificationCount },
         { href: "/resources", icon: FolderOpen, label: "Resources", badge: 0 },
         ...(isAdmin ? [{ href: "/admin", icon: Shield, label: "Admin", badge: 0 }] : []),

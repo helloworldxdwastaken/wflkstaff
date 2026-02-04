@@ -5,6 +5,7 @@ import { SideNav } from "@/components/side-nav"
 import { handleSignOut } from "@/actions/auth-actions"
 import { getUnreadNotificationCount } from "@/lib/notifications"
 import { AnalyticsWidget } from "@/components/dashboard/analytics-widget"
+import { LiveStatusWidget } from "@/components/dashboard/live-status-widget"
 import Link from "next/link"
 
 async function getTimeZones() {
@@ -73,6 +74,9 @@ export default async function DashboardPage() {
                     </header>
 
                     <div className="grid grid-cols-1 gap-6 lg:gap-8">
+                        {/* Live Status */}
+                        <LiveStatusWidget />
+
                         {/* Quick Links */}
                         <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {quickLinks.map((link) => {
