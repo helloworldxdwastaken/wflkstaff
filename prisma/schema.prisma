@@ -45,6 +45,7 @@ model User {
   polls          Poll[]         @relation("PollCreator")
   votes          Vote[]
   notifications  Notification[]
+  comments       Comment[]
 }
 
 model ActivityLog {
@@ -60,6 +61,7 @@ model InfoItem {
   title       String
   description String?
   content     String
+  username    String?  // For SECRET type - stores username/email
   type        String   // SQLite doesn't support enums
   visibleTo   String   // SQLite doesn't support scalar lists, storing as comma-separated string
   createdAt   DateTime @default(now())
@@ -74,6 +76,7 @@ model Poll {
   createdBy   User         @relation("PollCreator", fields: [createdById], references: [id], onDelete: Cascade)
   options     PollOption[]
   votes       Vote[]
+  comments    Comment[]
   isActive    Boolean      @default(true)
   expiresAt   DateTime?
   createdAt   DateTime     @default(now())
@@ -111,4 +114,18 @@ model Notification {
   link      String?  // Link to the relevant page
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  content   String
+  pollId    String
+  poll      Poll      @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId  String?   // For replies
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }

@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { votePoll, closePoll, deletePoll } from '@/actions/poll-actions'
-import { Check, Clock, MoreVertical, Trash2, XCircle, User } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
+import { votePoll, closePoll, deletePoll, addComment, deleteComment, editComment, editPoll } from '@/actions/poll-actions'
+import { Check, Clock, MoreVertical, Trash2, XCircle, User, MessageCircle, ChevronDown, ChevronUp, Reply, Send, Pencil, X } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -15,7 +17,30 @@ import {
 interface PollOption {
     id: string
     text: string
-    votes: { id: string }[]
+    votes: { id: string; user: { id: string; name: string | null } }[]
+}
+
+interface CommentUser {
+    id: string
+    name: string | null
+    image: string | null
+}
+
+interface CommentReply {
+    id: string
+    content: string
+    createdAt: Date
+    userId: string
+    user: CommentUser
+}
+
+interface Comment {
+    id: string
+    content: string
+    createdAt: Date
+    userId: string
+    user: CommentUser
+    replies: CommentReply[]
 }
 
 interface Poll {
@@ -28,23 +53,45 @@ interface Poll {
         image: string | null
     }
     options: PollOption[]
+    comments: Comment[]
     isActive: boolean
     expiresAt: Date | null
     createdAt: Date
     userVotedOptionId: string | null
     totalVotes: number
+    commentCount: number
     isExpired: boolean
+    voters: { id: string; name: string | null }[]
+    voterIds: string[]
+}
+
+interface TeamUser {
+    id: string
+    name: string | null
 }
 
 interface PollCardProps {
     poll: Poll
     currentUserId: string
     isAdmin: boolean
+    allUsers: TeamUser[]
 }
 
-export function PollCard({ poll, currentUserId, isAdmin }: PollCardProps) {
+export function PollCard({ poll, currentUserId, isAdmin, allUsers }: PollCardProps) {
     const [voting, setVoting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [showComments, setShowComments] = useState(false)
+    const [newComment, setNewComment] = useState('')
+    const [replyingTo, setReplyingTo] = useState<string | null>(null)
+    const [replyContent, setReplyContent] = useState('')
+    const [submittingComment, setSubmittingComment] = useState(false)
+    // Edit states
+    const [editingPoll, setEditingPoll] = useState(false)
+    const [editQuestion, setEditQuestion] = useState(poll.question)
+    const [editDescription, setEditDescription] = useState(poll.description || '')
+    const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+    const [editCommentContent, setEditCommentContent] = useState('')
+    const [saving, setSaving] = useState(false)
 
     const hasVoted = !!poll.userVotedOptionId
     const canModify = poll.createdById === currentUserId || isAdmin
@@ -99,21 +146,142 @@ export function PollCard({ poll, currentUserId, isAdmin }: PollCardProps) {
         return `${days}d ago`
     }
 
+    const formatTimestamp = (date: Date) => {
+        return new Date(date).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        })
+    }
+
+    const handleAddComment = async () => {
+        if (!newComment.trim()) return
+        setSubmittingComment(true)
+        const result = await addComment(poll.id, newComment)
+        if (result.error) {
+            setError(result.error)
+        } else {
+            setNewComment('')
+        }
+        setSubmittingComment(false)
+    }
+
+    const handleAddReply = async (parentId: string) => {
+        if (!replyContent.trim()) return
+        setSubmittingComment(true)
+        const result = await addComment(poll.id, replyContent, parentId)
+        if (result.error) {
+            setError(result.error)
+        } else {
+            setReplyContent('')
+            setReplyingTo(null)
+        }
+        setSubmittingComment(false)
+    }
+
+    const handleDeleteComment = async (commentId: string) => {
+        if (confirm('Delete this comment?')) {
+            const result = await deleteComment(commentId)
+            if (result.error) {
+                alert(result.error)
+            }
+        }
+    }
+
+    const handleEditPoll = async () => {
+        if (!editQuestion.trim()) return
+        setSaving(true)
+        const result = await editPoll(poll.id, editQuestion, editDescription || null)
+        if (result.error) {
+            setError(result.error)
+        } else {
+            setEditingPoll(false)
+        }
+        setSaving(false)
+    }
+
+    const startEditComment = (commentId: string, content: string) => {
+        setEditingCommentId(commentId)
+        setEditCommentContent(content)
+    }
+
+    const cancelEditComment = () => {
+        setEditingCommentId(null)
+        setEditCommentContent('')
+    }
+
+    const handleEditComment = async (commentId: string) => {
+        if (!editCommentContent.trim()) return
+        setSaving(true)
+        const result = await editComment(commentId, editCommentContent)
+        if (result.error) {
+            setError(result.error)
+        } else {
+            setEditingCommentId(null)
+            setEditCommentContent('')
+        }
+        setSaving(false)
+    }
+
     return (
         <Card className={`bg-slate-900/50 border-slate-800 ${!hasVoted && !isClosed ? 'border-l-4 border-l-indigo-500' : ''}`}>
             <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
-                        <CardTitle className="text-lg text-slate-100 flex items-center gap-2">
-                            {poll.question}
-                            {isClosed && (
-                                <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">
-                                    Closed
-                                </span>
-                            )}
-                        </CardTitle>
-                        {poll.description && (
-                            <p className="text-sm text-slate-400 mt-1">{poll.description}</p>
+                        {editingPoll ? (
+                            <div className="space-y-2">
+                                <Input
+                                    value={editQuestion}
+                                    onChange={(e) => setEditQuestion(e.target.value)}
+                                    placeholder="Poll question"
+                                    className="bg-slate-800/50 border-slate-700 text-slate-100"
+                                />
+                                <Textarea
+                                    value={editDescription}
+                                    onChange={(e) => setEditDescription(e.target.value)}
+                                    placeholder="Description (optional)"
+                                    className="bg-slate-800/50 border-slate-700 text-slate-100 text-sm resize-none"
+                                    rows={2}
+                                />
+                                <div className="flex gap-2">
+                                    <Button
+                                        onClick={handleEditPoll}
+                                        disabled={saving || !editQuestion.trim()}
+                                        size="sm"
+                                        className="bg-indigo-600 hover:bg-indigo-700"
+                                    >
+                                        {saving ? 'Saving...' : 'Save'}
+                                    </Button>
+                                    <Button
+                                        onClick={() => {
+                                            setEditingPoll(false)
+                                            setEditQuestion(poll.question)
+                                            setEditDescription(poll.description || '')
+                                        }}
+                                        size="sm"
+                                        variant="ghost"
+                                        className="text-slate-400 hover:text-slate-200"
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <CardTitle className="text-lg text-slate-100 flex items-center gap-2">
+                                    {poll.question}
+                                    {isClosed && (
+                                        <span className="text-xs bg-slate-700 text-slate-400 px-2 py-0.5 rounded">
+                                            Closed
+                                        </span>
+                                    )}
+                                </CardTitle>
+                                {poll.description && (
+                                    <p className="text-sm text-slate-400 mt-1 whitespace-pre-wrap">{poll.description}</p>
+                                )}
+                            </>
                         )}
                         <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
                             <span className="flex items-center gap-1">
@@ -131,7 +299,7 @@ export function PollCard({ poll, currentUserId, isAdmin }: PollCardProps) {
                             )}
                         </div>
                     </div>
-                    {canModify && !isClosed && (
+                    {canModify && !isClosed && !editingPoll && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-300">
@@ -139,6 +307,9 @@ export function PollCard({ poll, currentUserId, isAdmin }: PollCardProps) {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="bg-slate-900 border-slate-800 text-slate-200">
+                                <DropdownMenuItem onClick={() => setEditingPoll(true)} className="cursor-pointer hover:bg-slate-800">
+                                    <Pencil className="h-4 w-4 mr-2" /> Edit Poll
+                                </DropdownMenuItem>
                                 <DropdownMenuItem onClick={handleClose} className="cursor-pointer hover:bg-slate-800">
                                     <XCircle className="h-4 w-4 mr-2" /> Close Poll
                                 </DropdownMenuItem>
@@ -208,6 +379,233 @@ export function PollCard({ poll, currentUserId, isAdmin }: PollCardProps) {
 
                 <div className="pt-2 text-xs text-slate-500 text-center">
                     {poll.totalVotes} total vote{poll.totalVotes !== 1 ? 's' : ''}
+                </div>
+
+                {/* Voters & Missing Section */}
+                {(() => {
+                    const missingUsers = allUsers.filter(u => !poll.voterIds.includes(u.id))
+                    return (
+                        <div className="pt-3 mt-3 border-t border-slate-800/50 flex flex-wrap gap-x-4 gap-y-2 text-xs">
+                            {poll.voters.length > 0 && (
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-emerald-500">Voted:</span>
+                                    <span className="text-slate-400">
+                                        {poll.voters.map(v => v.name || 'Unknown').join(', ')}
+                                    </span>
+                                </div>
+                            )}
+                            {missingUsers.length > 0 && (
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-amber-500">Missing:</span>
+                                    <span className="text-slate-500">
+                                        {missingUsers.map(u => u.name || 'Unknown').join(', ')}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    )
+                })()}
+
+                {/* Comments Section */}
+                <div className="pt-4 border-t border-slate-800 mt-4">
+                    <button
+                        onClick={() => setShowComments(!showComments)}
+                        className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-300 transition-colors"
+                    >
+                        <MessageCircle className="h-4 w-4" />
+                        <span>{poll.commentCount} comment{poll.commentCount !== 1 ? 's' : ''}</span>
+                        {showComments ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+
+                    {showComments && (
+                        <div className="mt-4 space-y-4">
+                            {/* Add new comment */}
+                            <div className="flex gap-2">
+                                <Textarea
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    placeholder="Add a comment..."
+                                    className="bg-slate-800/50 border-slate-700 text-slate-100 text-sm resize-none min-h-[60px]"
+                                    rows={2}
+                                />
+                                <Button
+                                    onClick={handleAddComment}
+                                    disabled={submittingComment || !newComment.trim()}
+                                    size="sm"
+                                    className="bg-indigo-600 hover:bg-indigo-700 self-end"
+                                >
+                                    <Send className="h-4 w-4" />
+                                </Button>
+                            </div>
+
+                            {/* Comments list */}
+                            <div className="space-y-3">
+                                {poll.comments.map((comment) => (
+                                    <div key={comment.id} className="space-y-2">
+                                        {/* Main comment */}
+                                        <div className="bg-slate-800/30 rounded-lg p-3">
+                                            {editingCommentId === comment.id ? (
+                                                <div className="space-y-2">
+                                                    <Textarea
+                                                        value={editCommentContent}
+                                                        onChange={(e) => setEditCommentContent(e.target.value)}
+                                                        className="bg-slate-800/50 border-slate-700 text-slate-100 text-sm resize-none"
+                                                        rows={2}
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            onClick={() => handleEditComment(comment.id)}
+                                                            disabled={saving || !editCommentContent.trim()}
+                                                            size="sm"
+                                                            className="bg-indigo-600 hover:bg-indigo-700 h-7 text-xs"
+                                                        >
+                                                            Save
+                                                        </Button>
+                                                        <Button
+                                                            onClick={cancelEditComment}
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="text-slate-400 hover:text-slate-200 h-7 text-xs"
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 text-xs">
+                                                                <span className="font-medium text-slate-300">{comment.user.name || 'Unknown'}</span>
+                                                                <span className="text-slate-500">{formatTimestamp(comment.createdAt)}</span>
+                                                            </div>
+                                                            <p className="text-sm text-slate-300 mt-1 whitespace-pre-wrap">{comment.content}</p>
+                                                        </div>
+                                                        <div className="flex gap-1">
+                                                            {comment.userId === currentUserId && (
+                                                                <button
+                                                                    onClick={() => startEditComment(comment.id, comment.content)}
+                                                                    className="text-slate-500 hover:text-indigo-400 p-1"
+                                                                >
+                                                                    <Pencil className="h-3 w-3" />
+                                                                </button>
+                                                            )}
+                                                            {(comment.userId === currentUserId || isAdmin) && (
+                                                                <button
+                                                                    onClick={() => handleDeleteComment(comment.id)}
+                                                                    className="text-slate-500 hover:text-red-400 p-1"
+                                                                >
+                                                                    <Trash2 className="h-3 w-3" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
+                                                        className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-400 mt-2"
+                                                    >
+                                                        <Reply className="h-3 w-3" />
+                                                        Reply
+                                                    </button>
+                                                </>
+                                            )}
+
+                                            {/* Reply input */}
+                                            {replyingTo === comment.id && editingCommentId !== comment.id && (
+                                                <div className="flex gap-2 mt-2">
+                                                    <Textarea
+                                                        value={replyContent}
+                                                        onChange={(e) => setReplyContent(e.target.value)}
+                                                        placeholder="Write a reply..."
+                                                        className="bg-slate-800/50 border-slate-700 text-slate-100 text-sm resize-none min-h-[50px]"
+                                                        rows={2}
+                                                    />
+                                                    <Button
+                                                        onClick={() => handleAddReply(comment.id)}
+                                                        disabled={submittingComment || !replyContent.trim()}
+                                                        size="sm"
+                                                        className="bg-indigo-600 hover:bg-indigo-700 self-end"
+                                                    >
+                                                        <Send className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Replies */}
+                                        {comment.replies.length > 0 && (
+                                            <div className="ml-4 pl-3 border-l-2 border-slate-700 space-y-2">
+                                                {comment.replies.map((reply) => (
+                                                    <div key={reply.id} className="bg-slate-800/20 rounded-lg p-2">
+                                                        {editingCommentId === reply.id ? (
+                                                            <div className="space-y-2">
+                                                                <Textarea
+                                                                    value={editCommentContent}
+                                                                    onChange={(e) => setEditCommentContent(e.target.value)}
+                                                                    className="bg-slate-800/50 border-slate-700 text-slate-100 text-sm resize-none"
+                                                                    rows={2}
+                                                                />
+                                                                <div className="flex gap-2">
+                                                                    <Button
+                                                                        onClick={() => handleEditComment(reply.id)}
+                                                                        disabled={saving || !editCommentContent.trim()}
+                                                                        size="sm"
+                                                                        className="bg-indigo-600 hover:bg-indigo-700 h-7 text-xs"
+                                                                    >
+                                                                        Save
+                                                                    </Button>
+                                                                    <Button
+                                                                        onClick={cancelEditComment}
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="text-slate-400 hover:text-slate-200 h-7 text-xs"
+                                                                    >
+                                                                        Cancel
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center gap-2 text-xs">
+                                                                        <span className="font-medium text-slate-400">{reply.user.name || 'Unknown'}</span>
+                                                                        <span className="text-slate-600">{formatTimestamp(reply.createdAt)}</span>
+                                                                    </div>
+                                                                    <p className="text-sm text-slate-400 mt-1 whitespace-pre-wrap">{reply.content}</p>
+                                                                </div>
+                                                                <div className="flex gap-1">
+                                                                    {reply.userId === currentUserId && (
+                                                                        <button
+                                                                            onClick={() => startEditComment(reply.id, reply.content)}
+                                                                            className="text-slate-500 hover:text-indigo-400 p-1"
+                                                                        >
+                                                                            <Pencil className="h-3 w-3" />
+                                                                        </button>
+                                                                    )}
+                                                                    {(reply.userId === currentUserId || isAdmin) && (
+                                                                        <button
+                                                                            onClick={() => handleDeleteComment(reply.id)}
+                                                                            className="text-slate-500 hover:text-red-400 p-1"
+                                                                        >
+                                                                            <Trash2 className="h-3 w-3" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                                {poll.comments.length === 0 && (
+                                    <p className="text-sm text-slate-500 text-center py-2">No comments yet. Be the first to comment!</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </CardContent>
         </Card>

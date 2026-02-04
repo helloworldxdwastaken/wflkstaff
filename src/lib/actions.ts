@@ -112,6 +112,7 @@ const InfoItemSchema = z.object({
     title: z.string().min(1),
     description: z.string().optional(),
     content: z.string().min(1),
+    username: z.string().optional(), // For SECRET type
     type: z.enum(["LINK", "SECRET", "FILE"]),
     visibleTo: z.string().optional() // Default to ALL
 })
@@ -126,6 +127,7 @@ export async function createInfoItem(prevState: any, formData: FormData) {
         title: formData.get('title'),
         description: formData.get('description'),
         content: formData.get('content'),
+        username: formData.get('username') || undefined,
         type: formData.get('type'),
         visibleTo: "ALL",
     }
@@ -141,12 +143,14 @@ export async function createInfoItem(prevState: any, formData: FormData) {
                 title: validatedData.data.title,
                 description: validatedData.data.description || "",
                 content: validatedData.data.content,
+                username: validatedData.data.username || null,
                 type: validatedData.data.type,
                 visibleTo: (validatedData.data.visibleTo || "ALL") as string
             }
         })
         revalidatePath('/dashboard')
         revalidatePath('/admin')
+        revalidatePath('/resources')
         return { message: "Info item added!", success: true }
     } catch (e) {
         console.error(e)
@@ -161,6 +165,7 @@ export async function deleteInfoItem(itemId: string) {
     try {
         await prisma.infoItem.delete({ where: { id: itemId } })
         revalidatePath('/dashboard')
+        revalidatePath('/resources')
         return { message: "Item deleted." }
     } catch (e) {
         return { message: "Failed to delete item." }
@@ -178,6 +183,7 @@ export async function updateInfoItem(prevState: any, formData: FormData) {
         title: formData.get('title'),
         description: formData.get('description'),
         content: formData.get('content'),
+        username: formData.get('username') || undefined,
         type: formData.get('type'),
         visibleTo: "ALL",
     }
@@ -194,11 +200,13 @@ export async function updateInfoItem(prevState: any, formData: FormData) {
                 title: validatedData.data.title,
                 description: validatedData.data.description || "",
                 content: validatedData.data.content,
+                username: validatedData.data.username || null,
                 type: validatedData.data.type,
                 visibleTo: (validatedData.data.visibleTo || "ALL") as string
             }
         })
         revalidatePath('/dashboard')
+        revalidatePath('/resources')
         return { message: "Item updated!", success: true }
     } catch (e) {
         console.error(e)

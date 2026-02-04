@@ -81,7 +81,7 @@ export function ResourcesManager({ items, userId }: { items: any[], userId: stri
                                 <select id="type" name="type" className="w-full h-10 rounded-md border border-slate-700 bg-slate-800 text-slate-100 px-3 py-2 text-sm">
                                     <option value="LINK">Link</option>
                                     <option value="SECRET">Secret (Password/Key)</option>
-                                    <option value="FILE">File Reference</option>
+                                    <option value="FILE">File (Google Drive Link)</option>
                                 </select>
                             </div>
                             <div className="space-y-2">
@@ -186,13 +186,13 @@ export function ResourcesManager({ items, userId }: { items: any[], userId: stri
                                     >
                                         <Copy className="h-3.5 w-3.5" />
                                     </Button>
-                                    {item.type === 'LINK' && (
+                                    {(item.type === 'LINK' || item.type === 'FILE') && (
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="h-6 w-6 text-slate-500 hover:text-blue-400"
+                                            className={`h-6 w-6 text-slate-500 ${item.type === 'FILE' ? 'hover:text-emerald-400' : 'hover:text-blue-400'}`}
                                             onClick={() => window.open(item.content, '_blank')}
-                                            title="Open Link"
+                                            title={item.type === 'FILE' ? 'Open in Drive' : 'Open Link'}
                                         >
                                             <ExternalLink className="h-3.5 w-3.5" />
                                         </Button>

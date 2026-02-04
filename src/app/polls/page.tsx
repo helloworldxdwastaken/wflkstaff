@@ -8,6 +8,12 @@ import { CreatePollDialog } from "@/components/polls/create-poll-dialog"
 import { Vote } from "lucide-react"
 import { getUnreadNotificationCount } from "@/lib/notifications"
 
+async function getAllUsers() {
+    return prisma.user.findMany({
+        select: { id: true, name: true }
+    })
+}
+
 async function getPolls(userId: string) {
     const polls = await prisma.poll.findMany({
         orderBy: { createdAt: 'desc' },
@@ -17,25 +23,71 @@ async function getPolls(userId: string) {
             },
             options: {
                 include: {
-                    votes: true
+                    votes: {
+                        include: {
+                            user: {
+                                select: { id: true, name: true }
+                            }
+                        }
+                    }
                 }
             },
             votes: {
                 where: { userId },
                 select: { optionId: true }
             },
+            comments: {
+                where: { parentId: null }, // Only top-level comments
+                orderBy: { createdAt: 'asc' },
+                include: {
+                    user: {
+                        select: { id: true, name: true, image: true }
+                    },
+                    replies: {
+                        orderBy: { createdAt: 'asc' },
+                        include: {
+                            user: {
+                                select: { id: true, name: true, image: true }
+                            }
+                        }
+                    }
+                }
+            },
             _count: {
-                select: { votes: true }
+                select: { votes: true, comments: true }
             }
         }
     })
 
-    return polls.map(poll => ({
-        ...poll,
-        userVotedOptionId: poll.votes[0]?.optionId || null,
-        totalVotes: poll._count.votes,
-        isExpired: poll.expiresAt ? poll.expiresAt < new Date() : false
-    }))
+    return polls.map(poll => {
+        // Get all users who voted on this poll
+        const voterIds = new Set<string>()
+        poll.options.forEach(option => {
+            option.votes.forEach(vote => {
+                voterIds.add(vote.user.id)
+            })
+        })
+        
+        // Collect voters with their names
+        const voters: { id: string; name: string | null }[] = []
+        poll.options.forEach(option => {
+            option.votes.forEach(vote => {
+                if (!voters.find(v => v.id === vote.user.id)) {
+                    voters.push({ id: vote.user.id, name: vote.user.name })
+                }
+            })
+        })
+
+        return {
+            ...poll,
+            userVotedOptionId: poll.votes[0]?.optionId || null,
+            totalVotes: poll._count.votes,
+            commentCount: poll._count.comments,
+            isExpired: poll.expiresAt ? poll.expiresAt < new Date() : false,
+            voters,
+            voterIds: Array.from(voterIds)
+        }
+    })
 }
 
 async function getNotifications(userId: string) {
@@ -56,10 +108,11 @@ export default async function PollsPage() {
         redirect("/login")
     }
 
-    const [polls, notifications, notificationCount] = await Promise.all([
+    const [polls, notifications, notificationCount, allUsers] = await Promise.all([
         getPolls(session.user.id),
         getNotifications(session.user.id),
-        getUnreadNotificationCount(session.user.id)
+        getUnreadNotificationCount(session.user.id),
+        getAllUsers()
     ])
 
     return (
@@ -99,6 +152,7 @@ export default async function PollsPage() {
                         polls={polls} 
                         currentUserId={session.user.id}
                         isAdmin={session.user.role === 'ADMIN'}
+                        allUsers={allUsers}
                     />
                 </div>
             </main>

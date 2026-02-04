@@ -273,3 +273,168 @@ export async function markNotificationsAsRead(notificationIds?: string[]) {
         return { error: 'Failed to mark notifications as read' }
     }
 }
+
+// Add a comment to a poll
+export async function addComment(pollId: string, content: string, parentId?: string) {
+    const session = await auth()
+    if (!session?.user?.id) {
+        return { error: 'Not authenticated' }
+    }
+
+    if (!content || content.trim().length === 0) {
+        return { error: 'Comment cannot be empty' }
+    }
+
+    try {
+        // Verify poll exists
+        const poll = await prisma.poll.findUnique({
+            where: { id: pollId }
+        })
+
+        if (!poll) {
+            return { error: 'Poll not found' }
+        }
+
+        // If parentId, verify parent comment exists and belongs to this poll
+        if (parentId) {
+            const parentComment = await prisma.comment.findUnique({
+                where: { id: parentId }
+            })
+            if (!parentComment || parentComment.pollId !== pollId) {
+                return { error: 'Invalid parent comment' }
+            }
+        }
+
+        const comment = await prisma.comment.create({
+            data: {
+                content: content.trim(),
+                pollId,
+                userId: session.user.id,
+                parentId: parentId || null
+            },
+            include: {
+                user: {
+                    select: { name: true, image: true }
+                }
+            }
+        })
+
+        revalidatePath('/polls')
+        return { success: true, comment }
+    } catch (error) {
+        console.error('Error adding comment:', error)
+        return { error: 'Failed to add comment' }
+    }
+}
+
+// Delete a comment (only creator or admin)
+export async function deleteComment(commentId: string) {
+    const session = await auth()
+    if (!session?.user?.id) {
+        return { error: 'Not authenticated' }
+    }
+
+    try {
+        const comment = await prisma.comment.findUnique({
+            where: { id: commentId }
+        })
+
+        if (!comment) {
+            return { error: 'Comment not found' }
+        }
+
+        // Only creator or admin can delete
+        if (comment.userId !== session.user.id && session.user.role !== 'ADMIN') {
+            return { error: 'Not authorized' }
+        }
+
+        await prisma.comment.delete({
+            where: { id: commentId }
+        })
+
+        revalidatePath('/polls')
+        return { success: true }
+    } catch (error) {
+        console.error('Error deleting comment:', error)
+        return { error: 'Failed to delete comment' }
+    }
+}
+
+// Edit a comment (only creator)
+export async function editComment(commentId: string, content: string) {
+    const session = await auth()
+    if (!session?.user?.id) {
+        return { error: 'Not authenticated' }
+    }
+
+    if (!content || content.trim().length === 0) {
+        return { error: 'Comment cannot be empty' }
+    }
+
+    try {
+        const comment = await prisma.comment.findUnique({
+            where: { id: commentId }
+        })
+
+        if (!comment) {
+            return { error: 'Comment not found' }
+        }
+
+        // Only creator can edit their own comment
+        if (comment.userId !== session.user.id) {
+            return { error: 'Not authorized' }
+        }
+
+        await prisma.comment.update({
+            where: { id: commentId },
+            data: { content: content.trim() }
+        })
+
+        revalidatePath('/polls')
+        return { success: true }
+    } catch (error) {
+        console.error('Error editing comment:', error)
+        return { error: 'Failed to edit comment' }
+    }
+}
+
+// Edit a poll (only creator or admin)
+export async function editPoll(pollId: string, question: string, description: string | null) {
+    const session = await auth()
+    if (!session?.user?.id) {
+        return { error: 'Not authenticated' }
+    }
+
+    if (!question || question.trim().length === 0) {
+        return { error: 'Question cannot be empty' }
+    }
+
+    try {
+        const poll = await prisma.poll.findUnique({
+            where: { id: pollId }
+        })
+
+        if (!poll) {
+            return { error: 'Poll not found' }
+        }
+
+        // Only creator or admin can edit
+        if (poll.createdById !== session.user.id && session.user.role !== 'ADMIN') {
+            return { error: 'Not authorized' }
+        }
+
+        await prisma.poll.update({
+            where: { id: pollId },
+            data: {
+                question: question.trim(),
+                description: description?.trim() || null
+            }
+        })
+
+        revalidatePath('/polls')
+        return { success: true }
+    } catch (error) {
+        console.error('Error editing poll:', error)
+        return { error: 'Failed to edit poll' }
+    }
+}

@@ -5,7 +5,30 @@ import { PollCard } from './poll-card'
 interface PollOption {
     id: string
     text: string
-    votes: { id: string }[]
+    votes: { id: string; user: { id: string; name: string | null } }[]
+}
+
+interface CommentUser {
+    id: string
+    name: string | null
+    image: string | null
+}
+
+interface CommentReply {
+    id: string
+    content: string
+    createdAt: Date
+    userId: string
+    user: CommentUser
+}
+
+interface Comment {
+    id: string
+    content: string
+    createdAt: Date
+    userId: string
+    user: CommentUser
+    replies: CommentReply[]
 }
 
 interface Poll {
@@ -18,21 +41,31 @@ interface Poll {
         image: string | null
     }
     options: PollOption[]
+    comments: Comment[]
     isActive: boolean
     expiresAt: Date | null
     createdAt: Date
     userVotedOptionId: string | null
     totalVotes: number
+    commentCount: number
     isExpired: boolean
+    voters: { id: string; name: string | null }[]
+    voterIds: string[]
+}
+
+interface TeamUser {
+    id: string
+    name: string | null
 }
 
 interface PollListProps {
     polls: Poll[]
     currentUserId: string
     isAdmin: boolean
+    allUsers: TeamUser[]
 }
 
-export function PollList({ polls, currentUserId, isAdmin }: PollListProps) {
+export function PollList({ polls, currentUserId, isAdmin, allUsers }: PollListProps) {
     if (polls.length === 0) {
         return (
             <div className="text-center py-16 border border-dashed border-slate-800 rounded-lg">
@@ -57,6 +90,7 @@ export function PollList({ polls, currentUserId, isAdmin }: PollListProps) {
                                 poll={poll}
                                 currentUserId={currentUserId}
                                 isAdmin={isAdmin}
+                                allUsers={allUsers}
                             />
                         ))}
                     </div>
@@ -73,6 +107,7 @@ export function PollList({ polls, currentUserId, isAdmin }: PollListProps) {
                                 poll={poll}
                                 currentUserId={currentUserId}
                                 isAdmin={isAdmin}
+                                allUsers={allUsers}
                             />
                         ))}
                     </div>
