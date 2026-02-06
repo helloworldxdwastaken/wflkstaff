@@ -102,7 +102,7 @@ async function executeTool(name: string, args: any): Promise<string> {
         });
         // Match full query OR any significant word (so "guide about how to stream" matches "Streaming Guide")
         const stopWords = new Set(['the', 'a', 'an', 'how', 'to', 'for', 'on', 'in', 'at', 'is', 'it', 'and', 'or', 'about', 'need', 'get', 'find', 'want']);
-        const words = rawQuery.split(/\s+/).filter((w) => w.length > 1 && !stopWords.has(w));
+        const words = rawQuery.split(/\s+/).filter((w: string) => w.length > 1 && !stopWords.has(w));
         const filtered = items.filter((item) => {
           const title = item.title.toLowerCase();
           const desc = (item.description || '').toLowerCase();

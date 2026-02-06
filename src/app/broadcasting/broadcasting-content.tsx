@@ -637,7 +637,7 @@ export function BroadcastingContent() {
                         </div>
                         {!loading.schedule && streamers.length > 0 && (
                             <span className="hidden sm:inline text-xs text-slate-600">
-                                {getActiveDJCount()} active &middot; {getTotalScheduleCount()} schedules
+                                {getActiveDJCount()} active · {getTotalScheduleCount()} {getTotalScheduleCount() === 1 ? 'schedule' : 'schedules'}
                             </span>
                         )}
                     </div>
