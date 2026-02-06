@@ -108,12 +108,41 @@ export default async function PollsPage() {
         redirect("/login")
     }
 
-    const [polls, notifications, notificationCount, allUsers] = await Promise.all([
-        getPolls(session.user.id),
-        getNotifications(session.user.id),
-        getUnreadNotificationCount(session.user.id),
-        getAllUsers()
-    ])
+    let polls: Awaited<ReturnType<typeof getPolls>> = []
+    let notifications: Awaited<ReturnType<typeof getNotifications>> = []
+    let notificationCount = 0
+    let allUsers: Awaited<ReturnType<typeof getAllUsers>> = []
+
+    try {
+        const result = await Promise.all([
+            getPolls(session.user.id),
+            getNotifications(session.user.id),
+            getUnreadNotificationCount(session.user.id),
+            getAllUsers()
+        ])
+        polls = result[0]
+        notifications = result[1]
+        notificationCount = result[2]
+        allUsers = result[3]
+    } catch (err) {
+        console.error("Polls page data error:", err)
+        return (
+            <div className="min-h-screen bg-slate-950 text-slate-100">
+                <SideNav
+                    user={{ name: session.user.name ?? undefined, email: session.user.email ?? undefined, role: session.user.role }}
+                    signOutAction={handleSignOut}
+                    notificationCount={0}
+                />
+                <main className="lg:pl-64 pt-16 lg:pt-0 flex items-center justify-center min-h-[50vh] p-4">
+                    <div className="text-center max-w-md">
+                        <p className="text-red-400 font-medium">Something went wrong loading polls.</p>
+                        <p className="text-slate-500 text-sm mt-2">Check the server logs or try again later.</p>
+                        <a href="/dashboard" className="inline-block mt-4 text-indigo-400 hover:underline">Back to Dashboard</a>
+                    </div>
+                </main>
+            </div>
+        )
+    }
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100">

@@ -352,6 +352,15 @@ interface GroqMessage {
   tool_call_id?: string;
 }
 
+function parseRetryAfterSeconds(errBody: string): number | null {
+  const match = errBody.match(/try again in ([\d.]+)s/i) || errBody.match(/"retry_after":\s*(\d+)/);
+  if (match) {
+    const n = parseFloat(match[1]);
+    return Number.isFinite(n) ? Math.min(Math.ceil(n), 30) : null;
+  }
+  return null;
+}
+
 async function callGroq(
   messages: GroqMessage[],
   apiKey: string,
@@ -362,7 +371,7 @@ async function callGroq(
     model: GROQ_MODEL,
     messages,
     temperature,
-    max_tokens: 2048,
+    max_tokens: 1536,
   };
   if (useTools) {
     body.tools = toolDefinitions;
@@ -378,12 +387,23 @@ async function callGroq(
     body: JSON.stringify(body),
   });
 
+  const errBody = await res.text();
   if (!res.ok) {
-    const errBody = await res.text();
+    if (res.status === 429) {
+      const sec = parseRetryAfterSeconds(errBody);
+      const err: any = new Error(
+        sec != null
+          ? `Rate limit reached. Try again in ${sec} seconds.`
+          : 'Rate limit reached. Please try again in a moment.'
+      );
+      err.status = 429;
+      err.retryAfterSeconds = sec;
+      throw err;
+    }
     throw new Error(`Groq API error (${res.status}): ${errBody}`);
   }
 
-  return res.json();
+  return JSON.parse(errBody || '{}');
 }
 
 // --- Main POST handler ---
@@ -422,21 +442,38 @@ export async function POST(request: NextRequest) {
 
     // Tool-calling loop (max 5 iterations)
     let iterations = 0;
-    const temperatures = [0.3, 0.2, 0.1]; // retry with lower temp on tool validation failure
+    const temperatures = [0.3, 0.2, 0.1];
+
+    const callWith429Retry = async (useTools: boolean, temperature: number) => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          return await callGroq(groqMessages, apiKey, { useTools, temperature });
+        } catch (err: any) {
+          if (err?.status === 429 && err?.retryAfterSeconds != null && attempt === 0) {
+            await new Promise((r) => setTimeout(r, err.retryAfterSeconds * 1000));
+            continue;
+          }
+          throw err;
+        }
+      }
+    };
 
     while (iterations < 5) {
       let data: any;
       let lastErr: Error | null = null;
       for (let t = 0; t < temperatures.length; t++) {
         try {
-          data = await callGroq(groqMessages, apiKey, {
-            useTools: true,
-            temperature: temperatures[t],
-          });
+          data = await callWith429Retry(true, temperatures[t]);
           lastErr = null;
           break;
         } catch (err: any) {
           lastErr = err;
+          if (err?.status === 429) {
+            return NextResponse.json(
+              { error: err.message || 'Rate limit reached. Please try again in a minute.' },
+              { status: 429 }
+            );
+          }
           const isToolValidation =
             err?.message?.includes('400') && err?.message?.includes('tool call validation failed');
           if (isToolValidation && t < temperatures.length - 1) continue;
@@ -483,11 +520,27 @@ export async function POST(request: NextRequest) {
     }
 
     // If we exhausted iterations, do one final call without tools
-    const finalData = await callGroq(groqMessages, apiKey, { useTools: false });
-    const finalText = finalData.choices?.[0]?.message?.content || 'Sorry, I could not process that request.';
-    return NextResponse.json({ message: finalText });
+    try {
+      const finalData = await callWith429Retry(false, 0.3);
+      const finalText = finalData.choices?.[0]?.message?.content || 'Sorry, I could not process that request.';
+      return NextResponse.json({ message: finalText });
+    } catch (err: any) {
+      if (err?.status === 429) {
+        return NextResponse.json(
+          { error: err.message || 'Rate limit reached. Please try again in a minute.' },
+          { status: 429 }
+        );
+      }
+      throw err;
+    }
   } catch (error: any) {
     console.error('AI chat error:', error);
+    if (error?.status === 429) {
+      return NextResponse.json(
+        { error: error.message || 'Rate limit reached. Please try again in a minute.' },
+        { status: 429 }
+      );
+    }
     return NextResponse.json(
       { error: error.message || 'Failed to process request' },
       { status: 500 }
