@@ -107,7 +107,7 @@ async function executeTool(name: string, args: any): Promise<string> {
           const title = item.title.toLowerCase();
           const desc = (item.description || '').toLowerCase();
           if (title.includes(rawQuery) || desc.includes(rawQuery)) return true;
-          return words.some((word) => title.includes(word) || desc.includes(word));
+          return words.some((word: string) => title.includes(word) || desc.includes(word));
         });
         if (filtered.length === 0) return 'No resources found matching that query.';
         return JSON.stringify(
