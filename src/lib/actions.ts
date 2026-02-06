@@ -99,12 +99,68 @@ export async function deleteUser(userId: string) {
     }
 
     try {
+        // Delete related records first to avoid constraint issues
+        await prisma.notification.deleteMany({ where: { userId } })
+        await prisma.vote.deleteMany({ where: { userId } })
+        await prisma.comment.deleteMany({ where: { userId } })
+        await prisma.activityLog.deleteMany({ where: { userId } })
+        // Delete polls created by this user (cascades to options, votes, comments on those polls)
+        await prisma.poll.deleteMany({ where: { createdById: userId } })
+        await prisma.account.deleteMany({ where: { userId } })
+        // Now delete the user
         await prisma.user.delete({ where: { id: userId } })
         revalidatePath('/admin')
-        return { message: "User deleted." }
+        return { message: "User deleted.", success: true }
     } catch (e) {
         console.error("Delete user error:", e)
         return { message: "Failed to delete user." }
+    }
+}
+
+const UpdateUserSchema = z.object({
+    role: z.enum(["ADMIN", "STAFF"]).optional(),
+    jobTitle: z.string().optional(),
+    name: z.string().min(1).optional(),
+    timezone: z.string().optional(),
+})
+
+export async function updateUser(userId: string, data: { role?: string; jobTitle?: string; name?: string; timezone?: string }) {
+    const session = await auth()
+    if (session?.user?.role !== 'ADMIN') {
+        return { message: "Unauthorized" }
+    }
+
+    const validated = UpdateUserSchema.safeParse(data)
+    if (!validated.success) {
+        return { message: "Invalid data." }
+    }
+
+    const updateData: any = {}
+    if (validated.data.role) updateData.role = validated.data.role
+    if (validated.data.jobTitle !== undefined) updateData.jobTitle = validated.data.jobTitle
+    if (validated.data.name) updateData.name = validated.data.name
+    if (validated.data.timezone) updateData.timezone = validated.data.timezone
+
+    if (Object.keys(updateData).length === 0) {
+        return { message: "Nothing to update." }
+    }
+
+    // Prevent demoting yourself
+    if (userId === session.user.id && updateData.role === 'STAFF') {
+        return { message: "Cannot demote yourself." }
+    }
+
+    try {
+        await prisma.user.update({
+            where: { id: userId },
+            data: updateData,
+        })
+        revalidatePath('/admin')
+        revalidatePath('/dashboard')
+        return { message: "User updated.", success: true }
+    } catch (e) {
+        console.error("Update user error:", e)
+        return { message: "Failed to update user." }
     }
 }
 

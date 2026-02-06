@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import { prisma } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { CreateUserForm, DeleteUserButton } from "@/components/admin/admin-forms"
+import { CreateUserForm, DeleteUserButton, EditUserButton, RoleToggle } from "@/components/admin/admin-forms"
 import { SideNav } from "@/components/side-nav"
 import { handleSignOut } from "@/actions/auth-actions"
 import { getUnreadNotificationCount } from "@/lib/notifications"
@@ -30,6 +30,7 @@ export default async function AdminPage() {
     const users = await getUsers()
     const logs = await getLogs()
     const notificationCount = await getUnreadNotificationCount(session.user.id!)
+    const currentUserId = session.user.id!
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -43,7 +44,6 @@ export default async function AdminPage() {
                 notificationCount={notificationCount}
             />
 
-            {/* Main content with responsive padding */}
             <main className="lg:pl-64 pt-16 lg:pt-0">
                 <div className="p-4 sm:p-6 lg:p-8">
                     <h1 className="text-2xl sm:text-3xl font-bold mb-6 lg:mb-8 text-white">Admin Control Center</h1>
@@ -61,17 +61,30 @@ export default async function AdminPage() {
                                 {/* Mobile card view */}
                                 <div className="sm:hidden space-y-3 p-4 pt-0">
                                     {users.map((user: any) => (
-                                        <div key={user.id} className="bg-slate-800/50 rounded-lg p-4 space-y-2">
+                                        <div key={user.id} className="bg-slate-800/50 rounded-lg p-4 space-y-3">
                                             <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="font-medium text-slate-200">{user.name}</p>
-                                                    <p className="text-sm text-slate-400">{user.email}</p>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-slate-200 truncate">{user.name}</p>
+                                                    <p className="text-sm text-slate-400 truncate">{user.email}</p>
+                                                    {user.jobTitle && (
+                                                        <p className="text-xs text-slate-500 mt-0.5">{user.jobTitle}</p>
+                                                    )}
                                                 </div>
-                                                <DeleteUserButton userId={user.id} />
+                                                <div className="flex items-center gap-1 shrink-0 ml-2">
+                                                    <EditUserButton user={{
+                                                        id: user.id,
+                                                        name: user.name,
+                                                        email: user.email,
+                                                        role: user.role,
+                                                        jobTitle: user.jobTitle,
+                                                        timezone: user.timezone,
+                                                    }} currentUserId={currentUserId} />
+                                                    <DeleteUserButton userId={user.id} userName={user.name} />
+                                                </div>
                                             </div>
-                                            <div className="flex gap-2 flex-wrap">
-                                                <span className="bg-indigo-900/40 text-indigo-300 px-2 py-1 rounded text-xs">{user.role}</span>
-                                                <span className="text-xs text-slate-500 px-2 py-1 bg-slate-800 rounded">{user.timezone}</span>
+                                            <div className="flex gap-2 flex-wrap items-center">
+                                                <RoleToggle userId={user.id} currentRole={user.role} currentUserId={currentUserId} />
+                                                <span className="text-[10px] text-slate-600 px-2 py-0.5 bg-slate-800 rounded">{user.timezone}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -84,8 +97,9 @@ export default async function AdminPage() {
                                                 <TableHead className="text-slate-400">Name</TableHead>
                                                 <TableHead className="text-slate-400">Email</TableHead>
                                                 <TableHead className="text-slate-400">Role</TableHead>
+                                                <TableHead className="text-slate-400">Job Title</TableHead>
                                                 <TableHead className="text-slate-400">Timezone</TableHead>
-                                                <TableHead className="text-slate-400">Actions</TableHead>
+                                                <TableHead className="text-slate-400 text-right">Actions</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -93,10 +107,23 @@ export default async function AdminPage() {
                                                 <TableRow key={user.id} className="border-slate-800 hover:bg-slate-800/50">
                                                     <TableCell className="font-medium text-slate-200">{user.name}</TableCell>
                                                     <TableCell className="text-slate-400">{user.email}</TableCell>
-                                                    <TableCell><span className="bg-indigo-900/40 text-indigo-300 px-2 py-1 rounded text-xs">{user.role}</span></TableCell>
-                                                    <TableCell className="text-slate-400">{user.timezone}</TableCell>
                                                     <TableCell>
-                                                        <DeleteUserButton userId={user.id} />
+                                                        <RoleToggle userId={user.id} currentRole={user.role} currentUserId={currentUserId} />
+                                                    </TableCell>
+                                                    <TableCell className="text-slate-400 text-sm">{user.jobTitle || <span className="text-slate-600">—</span>}</TableCell>
+                                                    <TableCell className="text-slate-400 text-sm">{user.timezone}</TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <EditUserButton user={{
+                                                                id: user.id,
+                                                                name: user.name,
+                                                                email: user.email,
+                                                                role: user.role,
+                                                                jobTitle: user.jobTitle,
+                                                                timezone: user.timezone,
+                                                            }} currentUserId={currentUserId} />
+                                                            <DeleteUserButton userId={user.id} userName={user.name} />
+                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
                                             ))}

@@ -28,43 +28,22 @@ export async function GET() {
 
     const streamers = await streamersResponse.json();
 
-    // Fetch schedules for each streamer
-    const streamersWithSchedules = await Promise.all(
-      streamers.map(async (streamer: any) => {
-        try {
-          const scheduleResponse = await fetch(
-            `${API_URL}/station/${STATION_ID}/streamer/${streamer.id}/schedule`,
-            {
-              headers: {
-                'Authorization': `Bearer ${API_KEY}`,
-                'Accept': 'application/json'
-              },
-              next: { revalidate: 60 }
-            }
-          );
-
-          const schedule = scheduleResponse.ok ? await scheduleResponse.json() : [];
-
-          return {
-            id: streamer.id,
-            streamer_username: streamer.streamer_username,
-            display_name: streamer.display_name,
-            is_active: streamer.is_active,
-            enforce_schedule: streamer.enforce_schedule,
-            schedule: schedule,
-          };
-        } catch {
-          return {
-            id: streamer.id,
-            streamer_username: streamer.streamer_username,
-            display_name: streamer.display_name,
-            is_active: streamer.is_active,
-            enforce_schedule: streamer.enforce_schedule,
-            schedule: [],
-          };
-        }
-      })
-    );
+    // schedule_items are already included in the /streamers response from AzuraCast
+    const streamersWithSchedules = streamers.map((streamer: any) => ({
+      id: streamer.id,
+      streamer_username: streamer.streamer_username,
+      display_name: streamer.display_name,
+      is_active: streamer.is_active,
+      enforce_schedule: streamer.enforce_schedule,
+      schedule: (streamer.schedule_items || []).map((item: any) => ({
+        id: item.id,
+        start_time: item.start_time,
+        end_time: item.end_time,
+        start_date: item.start_date || null,
+        end_date: item.end_date || null,
+        days: item.days || [],
+      })),
+    }));
 
     return NextResponse.json(streamersWithSchedules);
 

@@ -50,35 +50,44 @@ interface Broadcast {
     recording: any
 }
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+interface UpcomingShow {
+    id: number
+    type: string
+    name: string
+    title: string
+    description: string
+    start: string
+    end: string
+    start_timestamp: number
+    end_timestamp: number
+    is_now: boolean
+}
 
-function formatTime(seconds: number): string {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+// AzuraCast uses ISO weekdays: 1=Mon, 2=Tue, ..., 7=Sun
+const DAYS_ISO: Record<number, string> = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun' }
+// JS weekday order for calendar view (0=Sun through 6=Sat)
+const DAYS_JS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+// Map ISO day to JS day index: 1(Mon)->1, ..., 6(Sat)->6, 7(Sun)->0
+const isoToJsDay = (iso: number) => iso === 7 ? 0 : iso
+
+function formatTime(timeInt: number): string {
+    const hours = Math.floor(timeInt / 100)
+    const minutes = timeInt % 100
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const displayHour = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
+    return `${displayHour}:${minutes.toString().padStart(2, '0')} ${period}`
 }
 
 function formatDuration(startTimestamp: number | null, endTimestamp: number | null): string {
-    // Check for invalid start timestamp
     if (!startTimestamp || startTimestamp <= 0 || isNaN(startTimestamp)) return 'Unknown'
-    // Check for missing end (ongoing broadcast)
     if (!endTimestamp || endTimestamp <= 0) return 'Ongoing'
-    
     const durationSeconds = endTimestamp - startTimestamp
-    
-    // Validate the duration is a positive number
     if (isNaN(durationSeconds) || durationSeconds < 0) return 'Unknown'
     if (durationSeconds === 0) return '0m'
-    
     const hours = Math.floor(durationSeconds / 3600)
     const minutes = Math.floor((durationSeconds % 3600) / 60)
-    
-    // Handle edge case where minutes might be NaN
     if (isNaN(hours) || isNaN(minutes)) return 'Unknown'
-    
-    if (hours > 0) {
-        return `${hours}h ${minutes}m`
-    }
+    if (hours > 0) return `${hours}h ${minutes}m`
     return `${minutes}m`
 }
 
@@ -86,14 +95,10 @@ function formatDate(timestamp: number | null): string {
     if (!timestamp || timestamp <= 0 || isNaN(timestamp)) return 'Unknown date'
     const date = new Date(timestamp * 1000)
     if (isNaN(date.getTime())) return 'Unknown date'
-    // Sanity check - if the date is before 2000 or after 2100, it's probably invalid
     if (date.getFullYear() < 2000 || date.getFullYear() > 2100) return 'Unknown date'
     return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
     })
 }
 
@@ -101,16 +106,11 @@ function formatTimeRange(startTimestamp: number | null, endTimestamp: number | n
     if (!startTimestamp || startTimestamp <= 0 || isNaN(startTimestamp)) return 'Unknown'
     const startDate = new Date(startTimestamp * 1000)
     if (isNaN(startDate.getTime()) || startDate.getFullYear() < 2000) return 'Unknown'
-    
     const startTime = startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    
     if (!endTimestamp || endTimestamp <= 0) return `${startTime} - Ongoing`
-    
     const endDate = new Date(endTimestamp * 1000)
     if (isNaN(endDate.getTime())) return `${startTime} - Ongoing`
-    
     const endTime = endDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    
     return `${startTime} - ${endTime}`
 }
 
@@ -118,40 +118,58 @@ function getRelativeDate(timestamp: number | null): string {
     if (!timestamp || timestamp <= 0 || isNaN(timestamp)) return ''
     const date = new Date(timestamp * 1000)
     if (isNaN(date.getTime()) || date.getFullYear() < 2000) return ''
-    
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+    const yesterday = new Date(today.getTime() - 86400000)
     const broadcastDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-    
     if (broadcastDate.getTime() === today.getTime()) return 'Today'
     if (broadcastDate.getTime() === yesterday.getTime()) return 'Yesterday'
-    
-    const diffDays = Math.floor((today.getTime() - broadcastDate.getTime()) / (24 * 60 * 60 * 1000))
+    const diffDays = Math.floor((today.getTime() - broadcastDate.getTime()) / 86400000)
     if (diffDays > 0 && diffDays < 7) return `${diffDays} days ago`
-    
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function timeUntil(isoString: string): string {
+    const diff = new Date(isoString).getTime() - Date.now()
+    if (diff <= 0) return 'now'
+    const mins = Math.floor(diff / 60000)
+    if (mins < 60) return `in ${mins}m`
+    const hrs = Math.floor(mins / 60)
+    const rm = mins % 60
+    if (hrs < 24) return rm > 0 ? `in ${hrs}h ${rm}m` : `in ${hrs}h`
+    const days = Math.floor(hrs / 24)
+    const rh = hrs % 24
+    return rh > 0 ? `in ${days}d ${rh}h` : `in ${days}d`
+}
+
+function formatShowTime(iso: string): string {
+    return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+}
+
+function formatShowDate(iso: string): string {
+    return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 export function BroadcastingContent() {
     const [nowPlaying, setNowPlaying] = useState<NowPlayingData | null>(null)
     const [streamers, setStreamers] = useState<Streamer[]>([])
     const [broadcasts, setBroadcasts] = useState<Broadcast[]>([])
+    const [upcoming, setUpcoming] = useState<UpcomingShow[]>([])
     const [loading, setLoading] = useState({ live: true, schedule: true, history: true })
     const [errors, setErrors] = useState({ live: '', schedule: '', history: '' })
-    
+
     // Schedule management state
     const [isAddScheduleOpen, setIsAddScheduleOpen] = useState(false)
     const [selectedStreamer, setSelectedStreamer] = useState<Streamer | null>(null)
     const [scheduleForm, setScheduleForm] = useState({ startTime: '09:00', endTime: '11:00', days: [] as number[] })
     const [submitting, setSubmitting] = useState(false)
-    
+
     // DJ management state
     const [isAddDJOpen, setIsAddDJOpen] = useState(false)
     const [isEditDJOpen, setIsEditDJOpen] = useState(false)
     const [djForm, setDJForm] = useState({ username: '', password: '', displayName: '', isActive: true })
     const [editingDJ, setEditingDJ] = useState<Streamer | null>(null)
-    
+
     // View state
     const [scheduleView, setScheduleView] = useState<'list' | 'calendar'>('list')
     const [refreshing, setRefreshing] = useState({ schedule: false, history: false })
@@ -159,20 +177,19 @@ export function BroadcastingContent() {
     const toggleDay = (day: number) => {
         setScheduleForm(prev => ({
             ...prev,
-            days: prev.days.includes(day) 
+            days: prev.days.includes(day)
                 ? prev.days.filter(d => d !== day)
                 : [...prev.days, day].sort()
         }))
     }
 
-    const timeToSeconds = (time: string): number => {
+    const timeToAzuraCast = (time: string): number => {
         const [hours, minutes] = time.split(':').map(Number)
-        return hours * 3600 + minutes * 60
+        return hours * 100 + minutes
     }
 
     const handleAddSchedule = async () => {
         if (!selectedStreamer || scheduleForm.days.length === 0) return
-        
         setSubmitting(true)
         try {
             const res = await fetch('/api/azuracast/schedule', {
@@ -180,23 +197,17 @@ export function BroadcastingContent() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     streamerId: selectedStreamer.id,
-                    start_time: timeToSeconds(scheduleForm.startTime),
-                    end_time: timeToSeconds(scheduleForm.endTime),
+                    start_time: timeToAzuraCast(scheduleForm.startTime),
+                    end_time: timeToAzuraCast(scheduleForm.endTime),
                     days: scheduleForm.days
                 })
             })
-            
             if (!res.ok) {
                 const error = await res.json()
                 throw new Error(error.error || 'Failed to create schedule')
             }
-            
-            // Refresh streamers data
             const streamersRes = await fetch('/api/azuracast/streamers')
-            if (streamersRes.ok) {
-                setStreamers(await streamersRes.json())
-            }
-            
+            if (streamersRes.ok) setStreamers(await streamersRes.json())
             setIsAddScheduleOpen(false)
             setScheduleForm({ startTime: '09:00', endTime: '11:00', days: [] })
             setSelectedStreamer(null)
@@ -209,19 +220,11 @@ export function BroadcastingContent() {
 
     const handleDeleteSchedule = async (streamerId: number, scheduleId: number) => {
         if (!confirm('Delete this schedule slot?')) return
-        
         try {
-            const res = await fetch(`/api/azuracast/schedule?streamerId=${streamerId}&scheduleId=${scheduleId}`, {
-                method: 'DELETE'
-            })
-            
+            const res = await fetch(`/api/azuracast/schedule?streamerId=${streamerId}&scheduleId=${scheduleId}`, { method: 'DELETE' })
             if (!res.ok) throw new Error('Failed to delete schedule')
-            
-            // Refresh streamers data
             const streamersRes = await fetch('/api/azuracast/streamers')
-            if (streamersRes.ok) {
-                setStreamers(await streamersRes.json())
-            }
+            if (streamersRes.ok) setStreamers(await streamersRes.json())
         } catch (err: any) {
             alert(err.message)
         }
@@ -235,7 +238,6 @@ export function BroadcastingContent() {
 
     const handleAddDJ = async () => {
         if (!djForm.username || !djForm.password) return
-        
         setSubmitting(true)
         try {
             const res = await fetch('/api/azuracast/streamers', {
@@ -248,16 +250,9 @@ export function BroadcastingContent() {
                     is_active: djForm.isActive
                 })
             })
-            
-            if (!res.ok) {
-                const error = await res.json()
-                throw new Error(error.error || 'Failed to create DJ')
-            }
-            
-            // Refresh streamers
+            if (!res.ok) { const error = await res.json(); throw new Error(error.error || 'Failed to create DJ') }
             const streamersRes = await fetch('/api/azuracast/streamers')
             if (streamersRes.ok) setStreamers(await streamersRes.json())
-            
             setIsAddDJOpen(false)
             setDJForm({ username: '', password: '', displayName: '', isActive: true })
         } catch (err: any) {
@@ -269,7 +264,6 @@ export function BroadcastingContent() {
 
     const handleEditDJ = async () => {
         if (!editingDJ) return
-        
         setSubmitting(true)
         try {
             const res = await fetch(`/api/azuracast/streamers/${editingDJ.id}`, {
@@ -281,16 +275,9 @@ export function BroadcastingContent() {
                     ...(djForm.password ? { streamer_password: djForm.password } : {})
                 })
             })
-            
-            if (!res.ok) {
-                const error = await res.json()
-                throw new Error(error.error || 'Failed to update DJ')
-            }
-            
-            // Refresh streamers
+            if (!res.ok) { const error = await res.json(); throw new Error(error.error || 'Failed to update DJ') }
             const streamersRes = await fetch('/api/azuracast/streamers')
             if (streamersRes.ok) setStreamers(await streamersRes.json())
-            
             setIsEditDJOpen(false)
             setEditingDJ(null)
             setDJForm({ username: '', password: '', displayName: '', isActive: true })
@@ -303,22 +290,15 @@ export function BroadcastingContent() {
 
     const openEditDJ = (streamer: Streamer) => {
         setEditingDJ(streamer)
-        setDJForm({
-            username: streamer.streamer_username,
-            password: '',
-            displayName: streamer.display_name || '',
-            isActive: streamer.is_active
-        })
+        setDJForm({ username: streamer.streamer_username, password: '', displayName: streamer.display_name || '', isActive: streamer.is_active })
         setIsEditDJOpen(true)
     }
 
     const handleDeleteDJ = async (id: number) => {
         if (!confirm('Delete this DJ? This will remove all their schedules too.')) return
-        
         try {
             const res = await fetch(`/api/azuracast/streamers/${id}`, { method: 'DELETE' })
             if (!res.ok) throw new Error('Failed to delete DJ')
-            
             const streamersRes = await fetch('/api/azuracast/streamers')
             if (streamersRes.ok) setStreamers(await streamersRes.json())
         } catch (err: any) {
@@ -326,7 +306,6 @@ export function BroadcastingContent() {
         }
     }
 
-    // Get all schedule slots for calendar view
     const getAllScheduleSlots = () => {
         const slots: { streamer: Streamer; schedule: ScheduleItem; day: number }[] = []
         streamers.forEach(streamer => {
@@ -339,7 +318,6 @@ export function BroadcastingContent() {
         return slots
     }
 
-    // Refresh functions
     const refreshStreamers = async () => {
         setRefreshing(r => ({ ...r, schedule: true }))
         try {
@@ -364,30 +342,21 @@ export function BroadcastingContent() {
         }
     }
 
-    // Day selection helpers for schedule dialog
-    const selectAllDays = () => setScheduleForm(f => ({ ...f, days: [0, 1, 2, 3, 4, 5, 6] }))
+    // Day selection helpers (AzuraCast ISO: 1=Mon...7=Sun)
+    const selectAllDays = () => setScheduleForm(f => ({ ...f, days: [1, 2, 3, 4, 5, 6, 7] }))
     const selectWeekdays = () => setScheduleForm(f => ({ ...f, days: [1, 2, 3, 4, 5] }))
-    const selectWeekends = () => setScheduleForm(f => ({ ...f, days: [0, 6] }))
+    const selectWeekends = () => setScheduleForm(f => ({ ...f, days: [6, 7] }))
     const clearDays = () => setScheduleForm(f => ({ ...f, days: [] }))
 
-    // Get total schedule count
-    const getTotalScheduleCount = () => {
-        return streamers.reduce((acc, s) => acc + s.schedule.length, 0)
-    }
-
-    // Get active DJ count
-    const getActiveDJCount = () => {
-        return streamers.filter(s => s.is_active).length
-    }
+    const getActiveDJCount = () => streamers.filter(s => s.is_active).length
+    const getTotalScheduleCount = () => streamers.reduce((acc, s) => acc + s.schedule.length, 0)
 
     useEffect(() => {
-        // Fetch Now Playing
         const fetchNowPlaying = async () => {
             try {
                 const res = await fetch('/api/azuracast/nowplaying')
                 if (!res.ok) throw new Error('Failed to fetch')
-                const data = await res.json()
-                setNowPlaying(data)
+                setNowPlaying(await res.json())
                 setErrors(e => ({ ...e, live: '' }))
             } catch (err: any) {
                 setErrors(e => ({ ...e, live: err.message }))
@@ -396,13 +365,21 @@ export function BroadcastingContent() {
             }
         }
 
-        // Fetch Streamers with schedules
+        const fetchUpcoming = async () => {
+            try {
+                const res = await fetch('/api/azuracast/listeners')
+                if (!res.ok) return
+                // Also fetch station schedule for upcoming shows
+                const schedRes = await fetch('/api/azuracast/nowplaying')
+                if (!schedRes.ok) return
+            } catch { /* ignore */ }
+        }
+
         const fetchStreamers = async () => {
             try {
                 const res = await fetch('/api/azuracast/streamers')
                 if (!res.ok) throw new Error('Failed to fetch')
-                const data = await res.json()
-                setStreamers(data)
+                setStreamers(await res.json())
                 setErrors(e => ({ ...e, schedule: '' }))
             } catch (err: any) {
                 setErrors(e => ({ ...e, schedule: err.message }))
@@ -411,13 +388,11 @@ export function BroadcastingContent() {
             }
         }
 
-        // Fetch Broadcasts history
         const fetchBroadcasts = async () => {
             try {
                 const res = await fetch('/api/azuracast/broadcasts')
                 if (!res.ok) throw new Error('Failed to fetch')
-                const data = await res.json()
-                setBroadcasts(data)
+                setBroadcasts(await res.json())
                 setErrors(e => ({ ...e, history: '' }))
             } catch (err: any) {
                 setErrors(e => ({ ...e, history: err.message }))
@@ -426,33 +401,45 @@ export function BroadcastingContent() {
             }
         }
 
+        // Fetch upcoming from station schedule endpoint
+        const fetchUpcomingShows = async () => {
+            try {
+                const res = await fetch('/api/azuracast/station-schedule')
+                if (!res.ok) return
+                setUpcoming(await res.json())
+            } catch { /* ignore - endpoint may not exist yet */ }
+        }
+
         fetchNowPlaying()
         fetchStreamers()
         fetchBroadcasts()
+        fetchUpcomingShows()
 
-        // Auto-refresh now playing every 15 seconds
         const interval = setInterval(fetchNowPlaying, 15000)
         return () => clearInterval(interval)
     }, [])
 
     return (
         <Tabs defaultValue="live" className="space-y-6">
-            <TabsList className="bg-slate-900/50 border border-slate-800">
-                <TabsTrigger value="live" className="text-slate-400 hover:text-white data-[state=active]:bg-slate-800 data-[state=active]:text-white">
-                    <Radio className="h-4 w-4 mr-1.5" />
-                    Live Status
+            <TabsList className="bg-slate-900/50 border border-slate-800 w-full sm:w-auto">
+                <TabsTrigger value="live" className="text-slate-400 hover:text-white data-[state=active]:bg-slate-800 data-[state=active]:text-white flex-1 sm:flex-none">
+                    <Radio className="h-4 w-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Live Status</span>
+                    <span className="sm:hidden ml-1.5">Live</span>
                 </TabsTrigger>
-                <TabsTrigger value="schedule" className="text-slate-400 hover:text-white data-[state=active]:bg-slate-800 data-[state=active]:text-white">
-                    <Calendar className="h-4 w-4 mr-1.5" />
-                    DJ Schedule
+                <TabsTrigger value="schedule" className="text-slate-400 hover:text-white data-[state=active]:bg-slate-800 data-[state=active]:text-white flex-1 sm:flex-none">
+                    <Calendar className="h-4 w-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">DJ Schedule</span>
+                    <span className="sm:hidden ml-1.5">Schedule</span>
                 </TabsTrigger>
-                <TabsTrigger value="history" className="text-slate-400 hover:text-white data-[state=active]:bg-slate-800 data-[state=active]:text-white">
-                    <History className="h-4 w-4 mr-1.5" />
-                    Broadcast History
+                <TabsTrigger value="history" className="text-slate-400 hover:text-white data-[state=active]:bg-slate-800 data-[state=active]:text-white flex-1 sm:flex-none">
+                    <History className="h-4 w-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Broadcast History</span>
+                    <span className="sm:hidden ml-1.5">History</span>
                 </TabsTrigger>
             </TabsList>
 
-            {/* Live Status Tab */}
+            {/* ─── Live Status Tab ─── */}
             <TabsContent value="live" className="space-y-6">
                 {loading.live ? (
                     <div className="flex items-center justify-center py-12">
@@ -467,98 +454,148 @@ export function BroadcastingContent() {
                     </Card>
                 ) : nowPlaying ? (
                     <>
-                        {/* Live DJ Status */}
-                        <Card className={`border ${nowPlaying.live.is_live ? 'bg-emerald-950/30 border-emerald-700' : 'bg-slate-900/50 border-slate-800'}`}>
-                            <CardHeader className="pb-3">
-                                <div className="flex items-center justify-between">
-                                    <CardTitle className="text-lg text-slate-200 flex items-center gap-2">
-                                        <Mic className="h-5 w-5" />
-                                        On-Air Status
-                                    </CardTitle>
-                                    <Badge className={nowPlaying.live.is_live ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300'}>
-                                        {nowPlaying.live.is_live ? '● LIVE' : 'AutoDJ'}
-                                    </Badge>
+                        {/* On-Air Banner */}
+                        <Card className={`border overflow-hidden ${nowPlaying.live.is_live
+                            ? 'bg-gradient-to-br from-emerald-950/40 to-emerald-900/20 border-emerald-700/50'
+                            : 'bg-slate-900/50 border-slate-800'
+                        }`}>
+                            <CardContent className="p-5 sm:p-6">
+                                <div className="flex items-center gap-4">
+                                    <div className={`shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center ${
+                                        nowPlaying.live.is_live
+                                            ? 'bg-emerald-600/20 border-2 border-emerald-500/30'
+                                            : 'bg-slate-800 border-2 border-slate-700'
+                                    }`}>
+                                        <Mic className={`h-7 w-7 ${nowPlaying.live.is_live ? 'text-emerald-400' : 'text-slate-500'}`} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            {nowPlaying.live.is_live ? (
+                                                <>
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                                                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Live Now</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">AutoDJ</span>
+                                            )}
+                                        </div>
+                                        <p className={`text-xl sm:text-2xl font-bold truncate ${
+                                            nowPlaying.live.is_live ? 'text-white' : 'text-slate-300'
+                                        }`}>
+                                            {nowPlaying.live.is_live ? nowPlaying.live.streamer_name : 'No live DJ'}
+                                        </p>
+                                        <p className="text-sm text-slate-500 mt-0.5">
+                                            {nowPlaying.live.is_live ? 'Currently broadcasting live' : 'Station running on auto-rotation'}
+                                        </p>
+                                    </div>
                                 </div>
-                            </CardHeader>
-                            <CardContent>
-                                {nowPlaying.live.is_live ? (
-                                    <div className="space-y-2">
-                                        <p className="text-2xl font-bold text-white">{nowPlaying.live.streamer_name}</p>
-                                        <p className="text-slate-400 text-sm">Currently broadcasting live</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2">
-                                        <p className="text-xl text-slate-300">No live DJ</p>
-                                        <p className="text-slate-500 text-sm">Station is running on AutoDJ</p>
-                                    </div>
-                                )}
                             </CardContent>
                         </Card>
 
-                        {/* Now Playing & Stats */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Now Playing + Listeners */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <Card className="bg-slate-900/50 border-slate-800">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-base text-slate-200 flex items-center gap-2">
-                                        <Music className="h-4 w-4 text-indigo-400" />
+                                <CardContent className="p-4 sm:p-5">
+                                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                        <Music className="h-3.5 w-3.5 text-indigo-400" />
                                         Now Playing
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="flex gap-4">
-                                    {nowPlaying.now_playing.song.art && (
-                                        <img 
-                                            src={nowPlaying.now_playing.song.art} 
-                                            alt="Album art"
-                                            className="w-16 h-16 rounded-lg object-cover"
-                                        />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-white font-medium truncate">{nowPlaying.now_playing.song.title || 'Unknown'}</p>
-                                        <p className="text-slate-400 text-sm truncate">{nowPlaying.now_playing.song.artist || 'Unknown Artist'}</p>
-                                        {nowPlaying.now_playing.is_request && (
-                                            <Badge variant="outline" className="mt-2 text-xs border-amber-600 text-amber-400">Request</Badge>
+                                    </p>
+                                    <div className="flex gap-3">
+                                        {nowPlaying.now_playing.song.art && (
+                                            <img
+                                                src={nowPlaying.now_playing.song.art}
+                                                alt="Album art"
+                                                className="w-14 h-14 rounded-lg object-cover shrink-0"
+                                            />
                                         )}
+                                        <div className="min-w-0">
+                                            <p className="text-white font-medium truncate text-sm">{nowPlaying.now_playing.song.title || 'Unknown'}</p>
+                                            <p className="text-slate-400 text-xs truncate mt-0.5">{nowPlaying.now_playing.song.artist || 'Unknown Artist'}</p>
+                                            {nowPlaying.now_playing.is_request && (
+                                                <Badge variant="outline" className="mt-1.5 text-[10px] border-amber-600/50 text-amber-400">Request</Badge>
+                                            )}
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>
 
                             <Card className="bg-slate-900/50 border-slate-800">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-base text-slate-200 flex items-center gap-2">
-                                        <Users className="h-4 w-4 text-cyan-400" />
+                                <CardContent className="p-4 sm:p-5">
+                                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                        <Users className="h-3.5 w-3.5 text-cyan-400" />
                                         Listeners
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="flex items-baseline gap-4">
+                                    </p>
+                                    <div className="flex items-end gap-6">
                                         <div>
-                                            <p className="text-3xl font-bold text-white">{nowPlaying.listeners.current}</p>
-                                            <p className="text-slate-500 text-xs">Current</p>
+                                            <p className="text-3xl font-bold text-white leading-none">{nowPlaying.listeners.current}</p>
+                                            <p className="text-slate-500 text-xs mt-1">Current</p>
                                         </div>
                                         <div>
-                                            <p className="text-xl text-slate-300">{nowPlaying.listeners.unique}</p>
-                                            <p className="text-slate-500 text-xs">Unique</p>
+                                            <p className="text-xl text-slate-300 leading-none">{nowPlaying.listeners.unique}</p>
+                                            <p className="text-slate-500 text-xs mt-1">Unique</p>
                                         </div>
                                     </div>
                                 </CardContent>
                             </Card>
                         </div>
 
+                        {/* Upcoming Shows */}
+                        {upcoming.length > 0 && (
+                            <Card className="bg-slate-900/50 border-slate-800">
+                                <CardContent className="p-4 sm:p-5">
+                                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                                        <Clock className="h-3.5 w-3.5 text-amber-400" />
+                                        Upcoming Shows
+                                    </p>
+                                    <div className="space-y-2">
+                                        {upcoming.map((show, idx) => {
+                                            const isToday = new Date(show.start).toDateString() === new Date().toDateString()
+                                            return (
+                                                <div key={`${show.id}-${idx}`} className={`flex items-center justify-between rounded-lg px-3 py-2.5 ${
+                                                    isToday ? 'bg-amber-950/20 border border-amber-700/30' : 'bg-slate-800/50'
+                                                }`}>
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                                                            <Mic className="h-4 w-4 text-indigo-400" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-medium text-white truncate">{show.name}</p>
+                                                            <p className="text-xs text-slate-500">
+                                                                {formatShowDate(show.start)} &middot; {formatShowTime(show.start)} – {formatShowTime(show.end)}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`shrink-0 ml-3 text-xs font-medium px-2 py-1 rounded-full ${
+                                                        isToday ? 'bg-amber-950/50 text-amber-400' : 'bg-slate-800 text-slate-500'
+                                                    }`}>
+                                                        {timeUntil(show.start)}
+                                                    </span>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+
                         {/* Recent Song History */}
                         {nowPlaying.song_history.length > 0 && (
                             <Card className="bg-slate-900/50 border-slate-800">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-base text-slate-200">Recent Tracks</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-3">
+                                <CardContent className="p-4 sm:p-5">
+                                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">Recent Tracks</p>
+                                    <div className="divide-y divide-slate-800/50">
                                         {nowPlaying.song_history.map((item: any, idx: number) => (
-                                            <div key={idx} className="flex items-center gap-3 text-sm">
-                                                <span className="text-slate-500 w-16">
+                                            <div key={idx} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
+                                                {item.song?.art && (
+                                                    <img src={item.song.art} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm text-slate-200 truncate">{item.song?.title}</p>
+                                                    <p className="text-xs text-slate-500 truncate">{item.song?.artist}</p>
+                                                </div>
+                                                <span className="text-xs text-slate-600 shrink-0">
                                                     {new Date(item.played_at * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                                                 </span>
-                                                <span className="text-slate-300 truncate">{item.song?.title}</span>
-                                                <span className="text-slate-500 truncate">— {item.song?.artist}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -569,48 +606,46 @@ export function BroadcastingContent() {
                 ) : null}
             </TabsContent>
 
-            {/* DJ Schedule Tab */}
+            {/* ─── DJ Schedule Tab ─── */}
             <TabsContent value="schedule" className="space-y-6">
-                {/* Header with actions */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 bg-slate-900/50 border border-slate-800 rounded-lg p-1">
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className={scheduleView === 'list' 
-                                    ? 'bg-slate-800 text-white' 
-                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'}
+                                className={`h-7 px-3 text-xs ${scheduleView === 'list'
+                                    ? 'bg-slate-800 text-white'
+                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                                 onClick={() => setScheduleView('list')}
                             >
-                                <Users className="h-4 w-4 mr-1.5" />
+                                <Users className="h-3.5 w-3.5 mr-1.5" />
                                 DJs
                             </Button>
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className={scheduleView === 'calendar' 
-                                    ? 'bg-slate-800 text-white' 
-                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'}
+                                className={`h-7 px-3 text-xs ${scheduleView === 'calendar'
+                                    ? 'bg-slate-800 text-white'
+                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                                 onClick={() => setScheduleView('calendar')}
                             >
-                                <CalendarDays className="h-4 w-4 mr-1.5" />
+                                <CalendarDays className="h-3.5 w-3.5 mr-1.5" />
                                 Calendar
                             </Button>
                         </div>
                         {!loading.schedule && streamers.length > 0 && (
-                            <div className="hidden sm:flex items-center gap-3 text-xs text-slate-500">
-                                <span>{getActiveDJCount()} active / {streamers.length} DJs</span>
-                                <span className="text-slate-700">|</span>
-                                <span>{getTotalScheduleCount()} schedules</span>
-                            </div>
+                            <span className="hidden sm:inline text-xs text-slate-600">
+                                {getActiveDJCount()} active &middot; {getTotalScheduleCount()} schedules
+                            </span>
                         )}
                     </div>
                     <div className="flex items-center gap-2">
                         <Button
                             variant="ghost"
-                            size="sm"
-                            className="text-slate-400 hover:text-white hover:bg-slate-800"
+                            size="icon"
+                            className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-800"
                             onClick={refreshStreamers}
                             disabled={refreshing.schedule}
                         >
@@ -619,10 +654,10 @@ export function BroadcastingContent() {
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="text-slate-400 hover:text-white hover:bg-slate-800"
+                            className="h-8 text-slate-300 hover:text-white bg-slate-800/50 border border-slate-700/50 hover:bg-slate-700 hover:border-slate-600"
                             onClick={() => setIsAddDJOpen(true)}
                         >
-                            <UserPlus className="h-4 w-4 mr-1.5" />
+                            <UserPlus className="h-3.5 w-3.5 mr-1.5" />
                             Add DJ
                         </Button>
                     </div>
@@ -644,7 +679,7 @@ export function BroadcastingContent() {
                         <CardContent className="text-center py-12">
                             <Calendar className="h-12 w-12 mx-auto mb-4 text-slate-600" />
                             <p className="text-slate-400">No DJs configured</p>
-                            <p className="text-slate-500 text-sm mt-1">Click "Add DJ" to create one</p>
+                            <p className="text-slate-500 text-sm mt-1">Click &ldquo;Add DJ&rdquo; to create one</p>
                         </CardContent>
                     </Card>
                 ) : scheduleView === 'calendar' ? (
@@ -654,7 +689,7 @@ export function BroadcastingContent() {
                             <CardContent className="text-center py-12">
                                 <CalendarDays className="h-12 w-12 mx-auto mb-4 text-slate-600" />
                                 <p className="text-slate-400">No schedules configured</p>
-                                <p className="text-slate-500 text-sm mt-1">Switch to DJs view to add schedules to your DJs</p>
+                                <p className="text-slate-500 text-sm mt-1">Switch to DJs view to add schedules</p>
                             </CardContent>
                         </Card>
                     ) : (
@@ -664,55 +699,50 @@ export function BroadcastingContent() {
                                 <CardDescription>All scheduled DJ broadcasts</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="overflow-x-auto">
-                                    <div className="min-w-[700px]">
-                                        {/* Day headers */}
-                                        <div className="grid grid-cols-7 gap-2 mb-4">
-                                            {DAYS.map((day, idx) => {
+                                <div className="overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
+                                    <div className="min-w-[640px]">
+                                        <div className="grid grid-cols-7 gap-1.5 mb-3">
+                                            {DAYS_JS.map((day, idx) => {
                                                 const isToday = idx === new Date().getDay()
                                                 return (
-                                                    <div key={day} className="text-center">
-                                                        <div className={`inline-flex items-center justify-center rounded-lg px-3 py-1 ${isToday ? 'bg-indigo-600/20' : ''}`}>
-                                                            <p className={`text-sm font-medium ${isToday ? 'text-indigo-400' : 'text-slate-400'}`}>
-                                                                {day}
-                                                                {isToday && <span className="ml-1.5 text-xs text-indigo-500">(Today)</span>}
-                                                            </p>
-                                                        </div>
+                                                    <div key={day} className={`text-center py-1.5 rounded-lg text-xs font-semibold ${
+                                                        isToday ? 'bg-indigo-600/20 text-indigo-400' : 'text-slate-500'
+                                                    }`}>
+                                                        {day}
                                                     </div>
                                                 )
                                             })}
                                         </div>
-                                        {/* Schedule slots */}
-                                        <div className="grid grid-cols-7 gap-2">
-                                            {DAYS.map((_, dayIdx) => {
-                                                const daySlots = getAllScheduleSlots().filter(s => s.day === dayIdx)
+                                        <div className="grid grid-cols-7 gap-1.5">
+                                            {DAYS_JS.map((_, dayIdx) => {
+                                                const daySlots = getAllScheduleSlots().filter(s => isoToJsDay(s.day) === dayIdx)
                                                     .sort((a, b) => a.schedule.start_time - b.schedule.start_time)
                                                 const isToday = dayIdx === new Date().getDay()
                                                 return (
-                                                    <div key={dayIdx} className={`space-y-2 min-h-[100px] rounded-lg p-1 ${isToday ? 'bg-indigo-950/20' : ''}`}>
+                                                    <div key={dayIdx} className={`space-y-1.5 min-h-[80px] rounded-lg p-1.5 ${
+                                                        isToday ? 'bg-indigo-950/20 border border-indigo-900/30' : 'bg-slate-800/20'
+                                                    }`}>
                                                         {daySlots.length === 0 ? (
                                                             <div className="h-full flex items-center justify-center py-4">
-                                                                <span className="text-slate-700 text-xs">No shows</span>
+                                                                <span className="text-slate-700 text-[10px]">—</span>
                                                             </div>
-                                                        ) : (
-                                                            daySlots.map((slot, i) => (
-                                                                <div 
-                                                                    key={`${slot.streamer.id}-${slot.schedule.id}-${i}`}
-                                                                    className={`rounded-lg p-2 text-xs ${
-                                                                        slot.streamer.is_active 
-                                                                            ? 'bg-indigo-600/20 border border-indigo-600/40' 
-                                                                            : 'bg-slate-800/50 border border-slate-700'
-                                                                    }`}
-                                                                >
-                                                                    <p className={`font-medium truncate ${slot.streamer.is_active ? 'text-indigo-300' : 'text-slate-400'}`}>
-                                                                        {slot.streamer.display_name || slot.streamer.streamer_username}
-                                                                    </p>
-                                                                    <p className="text-slate-500 mt-0.5">
-                                                                        {formatTime(slot.schedule.start_time)} - {formatTime(slot.schedule.end_time)}
-                                                                    </p>
-                                                                </div>
-                                                            ))
-                                                        )}
+                                                        ) : daySlots.map((slot, i) => (
+                                                            <div
+                                                                key={`${slot.streamer.id}-${slot.schedule.id}-${i}`}
+                                                                className={`rounded-md p-1.5 text-[11px] ${
+                                                                    slot.streamer.is_active
+                                                                        ? 'bg-indigo-600/15 border border-indigo-600/30'
+                                                                        : 'bg-slate-800/50 border border-slate-700/50'
+                                                                }`}
+                                                            >
+                                                                <p className={`font-medium truncate ${slot.streamer.is_active ? 'text-indigo-300' : 'text-slate-500'}`}>
+                                                                    {slot.streamer.display_name || slot.streamer.streamer_username}
+                                                                </p>
+                                                                <p className="text-slate-500 mt-0.5 leading-tight">
+                                                                    {formatTime(slot.schedule.start_time)}
+                                                                </p>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 )
                                             })}
@@ -724,74 +754,90 @@ export function BroadcastingContent() {
                     )
                 ) : (
                     /* List View */
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {streamers.map((streamer) => (
                             <Card key={streamer.id} className="bg-slate-900/50 border-slate-800">
-                                <CardHeader className="pb-3">
-                                    <div className="flex items-center justify-between">
-                                        <CardTitle className="text-base text-slate-200">
-                                            {streamer.display_name || streamer.streamer_username}
-                                        </CardTitle>
-                                        <div className="flex items-center gap-2">
-                                            <Badge className={streamer.is_active ? 'bg-emerald-600/20 text-emerald-400 border-emerald-600' : 'bg-slate-700 text-slate-400'}>
+                                <CardContent className="p-4 sm:p-5">
+                                    {/* DJ Header */}
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                                streamer.is_active ? 'bg-indigo-600/15 border border-indigo-600/30' : 'bg-slate-800 border border-slate-700'
+                                            }`}>
+                                                <Mic className={`h-4 w-4 ${streamer.is_active ? 'text-indigo-400' : 'text-slate-500'}`} />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-slate-200 truncate">
+                                                    {streamer.display_name || streamer.streamer_username}
+                                                </p>
+                                                <p className="text-xs text-slate-600">@{streamer.streamer_username}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                                            <Badge className={`text-[10px] ${
+                                                streamer.is_active
+                                                    ? 'bg-emerald-600/15 text-emerald-400 border-emerald-600/30'
+                                                    : 'bg-slate-800 text-slate-500 border-slate-700'
+                                            }`}>
                                                 {streamer.is_active ? 'Active' : 'Inactive'}
                                             </Badge>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 text-slate-400 hover:text-white hover:bg-slate-800"
+                                            <Button variant="ghost" size="icon"
+                                                className="h-7 w-7 text-slate-500 hover:text-white hover:bg-slate-800"
                                                 onClick={() => openEditDJ(streamer)}
                                             >
-                                                <Pencil className="h-3.5 w-3.5" />
+                                                <Pencil className="h-3 w-3" />
                                             </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 text-slate-400 hover:text-red-400 hover:bg-red-950/30"
+                                            <Button variant="ghost" size="icon"
+                                                className="h-7 w-7 text-slate-500 hover:text-red-400 hover:bg-red-950/30"
                                                 onClick={() => handleDeleteDJ(streamer.id)}
                                             >
-                                                <Trash2 className="h-3.5 w-3.5" />
+                                                <Trash2 className="h-3 w-3" />
                                             </Button>
                                         </div>
                                     </div>
-                                    <CardDescription className="text-slate-500">@{streamer.streamer_username}</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
+
+                                    {/* Schedule Items */}
                                     {streamer.schedule.length > 0 ? (
-                                        <div className="space-y-2">
-                                            <p className="text-xs text-slate-500 uppercase tracking-wide">Schedule</p>
+                                        <div className="space-y-1.5 mb-3">
                                             {streamer.schedule.map((item) => (
-                                                <div key={item.id} className="flex items-center justify-between text-sm bg-slate-800/50 rounded px-3 py-2 group">
-                                                    <div className="flex items-center gap-2">
-                                                        <Clock className="h-3.5 w-3.5 text-slate-500" />
-                                                        <span className="text-slate-300">
-                                                            {formatTime(item.start_time)} - {formatTime(item.end_time)}
-                                                        </span>
-                                                        <span className="text-slate-500">
-                                                            {item.days.map(d => DAYS[d]).join(', ')}
-                                                        </span>
+                                                <div key={item.id} className="flex items-center justify-between rounded-lg bg-slate-800/40 px-3 py-2">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <Clock className="h-3 w-3 text-slate-600 shrink-0" />
+                                                            <span className="text-xs text-slate-300 whitespace-nowrap">
+                                                                {formatTime(item.start_time)} – {formatTime(item.end_time)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex gap-1 flex-wrap">
+                                                            {item.days.map(d => (
+                                                                <span key={d} className="text-[10px] font-bold bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded">
+                                                                    {DAYS_ISO[d]}
+                                                                </span>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-6 w-6 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-400 hover:bg-red-950/30"
+                                                        className="h-6 w-6 shrink-0 ml-2 text-slate-600 hover:text-red-400 hover:bg-red-950/30"
                                                         onClick={() => handleDeleteSchedule(streamer.id, item.id)}
                                                     >
-                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                        <Trash2 className="h-3 w-3" />
                                                     </Button>
                                                 </div>
                                             ))}
                                         </div>
                                     ) : (
-                                        <p className="text-slate-500 text-sm">No schedule set</p>
+                                        <p className="text-xs text-slate-600 mb-3 py-2">No schedule set</p>
                                     )}
+
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="w-full text-slate-300 bg-slate-800/50 border border-slate-700/50 hover:text-white hover:bg-slate-700 hover:border-slate-600"
+                                        className="w-full h-8 text-xs text-slate-400 bg-slate-800/30 border border-slate-700/40 hover:text-white hover:bg-slate-700 hover:border-slate-600"
                                         onClick={() => openAddSchedule(streamer)}
                                     >
-                                        <Plus className="h-4 w-4 mr-2" />
+                                        <Plus className="h-3.5 w-3.5 mr-1.5" />
                                         Add Schedule
                                     </Button>
                                 </CardContent>
@@ -802,7 +848,7 @@ export function BroadcastingContent() {
 
                 {/* Add Schedule Dialog */}
                 <Dialog open={isAddScheduleOpen} onOpenChange={setIsAddScheduleOpen}>
-                    <DialogContent className="bg-slate-900 border-slate-800 text-slate-100">
+                    <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-md">
                         <DialogHeader>
                             <DialogTitle>
                                 Add Schedule for {selectedStreamer?.display_name || selectedStreamer?.streamer_username}
@@ -811,21 +857,15 @@ export function BroadcastingContent() {
                         <div className="space-y-4 mt-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="startTime" className="text-slate-200">Start Time</Label>
-                                    <Input
-                                        id="startTime"
-                                        type="time"
-                                        value={scheduleForm.startTime}
+                                    <Label htmlFor="startTime" className="text-slate-300 text-xs">Start Time</Label>
+                                    <Input id="startTime" type="time" value={scheduleForm.startTime}
                                         onChange={(e) => setScheduleForm(f => ({ ...f, startTime: e.target.value }))}
                                         className="bg-slate-800/50 border-slate-700 text-slate-100"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="endTime" className="text-slate-200">End Time</Label>
-                                    <Input
-                                        id="endTime"
-                                        type="time"
-                                        value={scheduleForm.endTime}
+                                    <Label htmlFor="endTime" className="text-slate-300 text-xs">End Time</Label>
+                                    <Input id="endTime" type="time" value={scheduleForm.endTime}
                                         onChange={(e) => setScheduleForm(f => ({ ...f, endTime: e.target.value }))}
                                         className="bg-slate-800/50 border-slate-700 text-slate-100"
                                     />
@@ -833,84 +873,49 @@ export function BroadcastingContent() {
                             </div>
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <Label className="text-slate-200">Days</Label>
+                                    <Label className="text-slate-300 text-xs">Days</Label>
                                     <div className="flex items-center gap-1">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 px-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800"
-                                            onClick={selectAllDays}
-                                        >
-                                            All
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 px-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800"
-                                            onClick={selectWeekdays}
-                                        >
-                                            Weekdays
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 px-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800"
-                                            onClick={selectWeekends}
-                                        >
-                                            Weekends
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-6 px-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800"
-                                            onClick={clearDays}
-                                        >
-                                            Clear
-                                        </Button>
+                                        {[
+                                            { label: 'All', fn: selectAllDays },
+                                            { label: 'Weekdays', fn: selectWeekdays },
+                                            { label: 'Weekends', fn: selectWeekends },
+                                            { label: 'Clear', fn: clearDays },
+                                        ].map(({ label, fn }) => (
+                                            <Button key={label} type="button" variant="ghost" size="sm"
+                                                className="h-6 px-2 text-[10px] text-slate-500 hover:text-white hover:bg-slate-800"
+                                                onClick={fn}
+                                            >{label}</Button>
+                                        ))}
                                     </div>
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {DAYS.map((day, idx) => (
-                                        <Button
-                                            key={day}
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            className={`${
-                                                scheduleForm.days.includes(idx)
-                                                    ? 'bg-slate-700 text-white hover:bg-slate-600'
-                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                <div className="flex flex-wrap gap-1.5">
+                                    {[1, 2, 3, 4, 5, 6, 7].map((isoDay) => (
+                                        <Button key={isoDay} type="button" variant="ghost" size="sm"
+                                            className={`h-8 w-12 text-xs ${
+                                                scheduleForm.days.includes(isoDay)
+                                                    ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-600/40 hover:bg-indigo-600/30'
+                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent'
                                             }`}
-                                            onClick={() => toggleDay(idx)}
+                                            onClick={() => toggleDay(isoDay)}
                                         >
-                                            {day}
+                                            {DAYS_ISO[isoDay]}
                                         </Button>
                                     ))}
                                 </div>
                                 {scheduleForm.days.length === 0 && (
-                                    <p className="text-xs text-amber-400">Select at least one day</p>
+                                    <p className="text-[11px] text-amber-400/70">Select at least one day</p>
                                 )}
                             </div>
                         </div>
-                        <DialogFooter className="mt-6">
-                            <Button
-                                variant="ghost"
-                                onClick={() => setIsAddScheduleOpen(false)}
-                                className="text-slate-400 hover:text-white hover:bg-slate-800"
-                            >
+                        <DialogFooter className="mt-6 gap-2">
+                            <Button variant="ghost" onClick={() => setIsAddScheduleOpen(false)}
+                                className="text-slate-400 hover:text-white hover:bg-slate-800">
                                 Cancel
                             </Button>
-                            <Button
-                                variant="ghost"
-                                onClick={handleAddSchedule}
+                            <Button variant="ghost" onClick={handleAddSchedule}
                                 disabled={submitting || scheduleForm.days.length === 0}
-                                className="bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700"
-                            >
-                                {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                className="bg-indigo-600/20 text-indigo-300 border border-indigo-600/40 hover:bg-indigo-600/30">
+                                {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                                 Add Schedule
                             </Button>
                         </DialogFooter>
@@ -919,77 +924,58 @@ export function BroadcastingContent() {
 
                 {/* Add DJ Dialog */}
                 <Dialog open={isAddDJOpen} onOpenChange={setIsAddDJOpen}>
-                    <DialogContent className="bg-slate-900 border-slate-800 text-slate-100">
+                    <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-md">
                         <DialogHeader>
                             <DialogTitle>Add New DJ</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4 mt-4">
                             <div className="space-y-2">
-                                <Label htmlFor="djUsername" className="text-slate-200">Username *</Label>
-                                <Input
-                                    id="djUsername"
-                                    value={djForm.username}
+                                <Label htmlFor="djUsername" className="text-slate-300 text-xs">Username *</Label>
+                                <Input id="djUsername" value={djForm.username}
                                     onChange={(e) => setDJForm(f => ({ ...f, username: e.target.value }))}
                                     placeholder="dj_username"
                                     className="bg-slate-800/50 border-slate-700 text-slate-100"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="djPassword" className="text-slate-200">Password *</Label>
-                                <Input
-                                    id="djPassword"
-                                    type="password"
-                                    value={djForm.password}
+                                <Label htmlFor="djPassword" className="text-slate-300 text-xs">Password *</Label>
+                                <Input id="djPassword" type="password" value={djForm.password}
                                     onChange={(e) => setDJForm(f => ({ ...f, password: e.target.value }))}
                                     placeholder="Stream password"
                                     className="bg-slate-800/50 border-slate-700 text-slate-100"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="djDisplayName" className="text-slate-200">Display Name</Label>
-                                <Input
-                                    id="djDisplayName"
-                                    value={djForm.displayName}
+                                <Label htmlFor="djDisplayName" className="text-slate-300 text-xs">Display Name</Label>
+                                <Input id="djDisplayName" value={djForm.displayName}
                                     onChange={(e) => setDJForm(f => ({ ...f, displayName: e.target.value }))}
                                     placeholder="DJ Name"
                                     className="bg-slate-800/50 border-slate-700 text-slate-100"
                                 />
                             </div>
                             <div className="flex items-center gap-3">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className={djForm.isActive 
-                                        ? 'bg-slate-700 text-emerald-400 hover:bg-slate-600' 
-                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'}
+                                <Button type="button" variant="ghost" size="sm"
+                                    className={djForm.isActive
+                                        ? 'bg-emerald-600/15 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/25'
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent'}
                                     onClick={() => setDJForm(f => ({ ...f, isActive: !f.isActive }))}
                                 >
                                     {djForm.isActive ? 'Active' : 'Inactive'}
                                 </Button>
-                                <span className="text-slate-400 text-sm">
+                                <span className="text-slate-500 text-xs">
                                     {djForm.isActive ? 'DJ can broadcast' : 'DJ cannot broadcast'}
                                 </span>
                             </div>
                         </div>
-                        <DialogFooter className="mt-6">
-                            <Button
-                                variant="ghost"
-                                onClick={() => {
-                                    setIsAddDJOpen(false)
-                                    setDJForm({ username: '', password: '', displayName: '', isActive: true })
-                                }}
-                                className="text-slate-400 hover:text-white hover:bg-slate-800"
-                            >
+                        <DialogFooter className="mt-6 gap-2">
+                            <Button variant="ghost" onClick={() => { setIsAddDJOpen(false); setDJForm({ username: '', password: '', displayName: '', isActive: true }) }}
+                                className="text-slate-400 hover:text-white hover:bg-slate-800">
                                 Cancel
                             </Button>
-                            <Button
-                                variant="ghost"
-                                onClick={handleAddDJ}
+                            <Button variant="ghost" onClick={handleAddDJ}
                                 disabled={submitting || !djForm.username || !djForm.password}
-                                className="bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700"
-                            >
-                                {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                className="bg-indigo-600/20 text-indigo-300 border border-indigo-600/40 hover:bg-indigo-600/30">
+                                {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                                 Add DJ
                             </Button>
                         </DialogFooter>
@@ -998,68 +984,49 @@ export function BroadcastingContent() {
 
                 {/* Edit DJ Dialog */}
                 <Dialog open={isEditDJOpen} onOpenChange={setIsEditDJOpen}>
-                    <DialogContent className="bg-slate-900 border-slate-800 text-slate-100">
+                    <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-md">
                         <DialogHeader>
-                            <DialogTitle>Edit DJ: {editingDJ?.streamer_username}</DialogTitle>
+                            <DialogTitle>Edit DJ: {editingDJ?.display_name || editingDJ?.streamer_username}</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4 mt-4">
                             <div className="space-y-2">
-                                <Label htmlFor="editDjDisplayName" className="text-slate-200">Display Name</Label>
-                                <Input
-                                    id="editDjDisplayName"
-                                    value={djForm.displayName}
+                                <Label htmlFor="editDjDisplayName" className="text-slate-300 text-xs">Display Name</Label>
+                                <Input id="editDjDisplayName" value={djForm.displayName}
                                     onChange={(e) => setDJForm(f => ({ ...f, displayName: e.target.value }))}
                                     placeholder="DJ Name"
                                     className="bg-slate-800/50 border-slate-700 text-slate-100"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="editDjPassword" className="text-slate-200">New Password (leave blank to keep current)</Label>
-                                <Input
-                                    id="editDjPassword"
-                                    type="password"
-                                    value={djForm.password}
+                                <Label htmlFor="editDjPassword" className="text-slate-300 text-xs">New Password (leave blank to keep current)</Label>
+                                <Input id="editDjPassword" type="password" value={djForm.password}
                                     onChange={(e) => setDJForm(f => ({ ...f, password: e.target.value }))}
                                     placeholder="New stream password"
                                     className="bg-slate-800/50 border-slate-700 text-slate-100"
                                 />
                             </div>
                             <div className="flex items-center gap-3">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className={djForm.isActive 
-                                        ? 'bg-slate-700 text-emerald-400 hover:bg-slate-600' 
-                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'}
+                                <Button type="button" variant="ghost" size="sm"
+                                    className={djForm.isActive
+                                        ? 'bg-emerald-600/15 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/25'
+                                        : 'text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent'}
                                     onClick={() => setDJForm(f => ({ ...f, isActive: !f.isActive }))}
                                 >
                                     {djForm.isActive ? 'Active' : 'Inactive'}
                                 </Button>
-                                <span className="text-slate-400 text-sm">
+                                <span className="text-slate-500 text-xs">
                                     {djForm.isActive ? 'DJ can broadcast' : 'DJ cannot broadcast'}
                                 </span>
                             </div>
                         </div>
-                        <DialogFooter className="mt-6">
-                            <Button
-                                variant="ghost"
-                                onClick={() => {
-                                    setIsEditDJOpen(false)
-                                    setEditingDJ(null)
-                                    setDJForm({ username: '', password: '', displayName: '', isActive: true })
-                                }}
-                                className="text-slate-400 hover:text-white hover:bg-slate-800"
-                            >
+                        <DialogFooter className="mt-6 gap-2">
+                            <Button variant="ghost" onClick={() => { setIsEditDJOpen(false); setEditingDJ(null); setDJForm({ username: '', password: '', displayName: '', isActive: true }) }}
+                                className="text-slate-400 hover:text-white hover:bg-slate-800">
                                 Cancel
                             </Button>
-                            <Button
-                                variant="ghost"
-                                onClick={handleEditDJ}
-                                disabled={submitting}
-                                className="bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700"
-                            >
-                                {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            <Button variant="ghost" onClick={handleEditDJ} disabled={submitting}
+                                className="bg-indigo-600/20 text-indigo-300 border border-indigo-600/40 hover:bg-indigo-600/30">
+                                {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                                 Save Changes
                             </Button>
                         </DialogFooter>
@@ -1067,23 +1034,17 @@ export function BroadcastingContent() {
                 </Dialog>
             </TabsContent>
 
-            {/* Broadcast History Tab */}
+            {/* ─── Broadcast History Tab ─── */}
             <TabsContent value="history" className="space-y-6">
-                {/* Header with refresh */}
                 <div className="flex items-center justify-between">
-                    <div className="text-sm text-slate-500">
-                        {!loading.history && broadcasts.length > 0 && (
-                            <span>{broadcasts.length} broadcast{broadcasts.length !== 1 ? 's' : ''} found</span>
-                        )}
-                    </div>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-slate-400 hover:text-white hover:bg-slate-800"
-                        onClick={refreshBroadcasts}
-                        disabled={refreshing.history}
+                    <span className="text-xs text-slate-600">
+                        {!loading.history && broadcasts.length > 0 && `${broadcasts.length} broadcast${broadcasts.length !== 1 ? 's' : ''}`}
+                    </span>
+                    <Button variant="ghost" size="sm"
+                        className="h-8 text-slate-400 hover:text-white hover:bg-slate-800"
+                        onClick={refreshBroadcasts} disabled={refreshing.history}
                     >
-                        <RefreshCw className={`h-4 w-4 mr-1.5 ${refreshing.history ? 'animate-spin' : ''}`} />
+                        <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${refreshing.history ? 'animate-spin' : ''}`} />
                         Refresh
                     </Button>
                 </div>
@@ -1108,69 +1069,59 @@ export function BroadcastingContent() {
                         </CardContent>
                     </Card>
                 ) : (
-                    <Card className="bg-slate-900/50 border-slate-800">
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-lg text-slate-200">Recent Broadcasts</CardTitle>
-                            <CardDescription>History of live DJ sessions</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3">
-                                {broadcasts.map((broadcast) => {
-                                    const isOngoing = !broadcast.timestamp_end
-                                    return (
-                                        <div 
-                                            key={broadcast.id} 
-                                            className={`flex items-center justify-between rounded-lg px-4 py-3 ${
-                                                isOngoing 
-                                                    ? 'bg-emerald-950/30 border border-emerald-700' 
-                                                    : 'bg-slate-800/50'
-                                            }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                                    isOngoing ? 'bg-emerald-600/20' : 'bg-indigo-600/20'
+                    <div className="space-y-2">
+                        {broadcasts.map((broadcast) => {
+                            const isOngoing = !broadcast.timestamp_end
+                            return (
+                                <Card key={broadcast.id} className={`border overflow-hidden ${
+                                    isOngoing
+                                        ? 'bg-emerald-950/20 border-emerald-700/40'
+                                        : 'bg-slate-900/50 border-slate-800'
+                                }`}>
+                                    <CardContent className="p-3 sm:p-4">
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                            {/* Left: Avatar + Info */}
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                                    isOngoing ? 'bg-emerald-600/20' : 'bg-indigo-600/15'
                                                 }`}>
-                                                    <Mic className={`h-5 w-5 ${isOngoing ? 'text-emerald-400' : 'text-indigo-400'}`} />
+                                                    <Mic className={`h-4 w-4 ${isOngoing ? 'text-emerald-400' : 'text-indigo-400'}`} />
                                                 </div>
-                                                <div>
+                                                <div className="min-w-0">
                                                     <div className="flex items-center gap-2">
-                                                        <p className="text-slate-200 font-medium">{broadcast.streamer_name}</p>
+                                                        <p className="text-sm font-medium text-slate-200 truncate">{broadcast.streamer_name}</p>
                                                         {isOngoing && (
-                                                            <Badge className="bg-emerald-600 text-white text-xs py-0">
-                                                                LIVE NOW
-                                                            </Badge>
+                                                            <Badge className="bg-emerald-600 text-white text-[10px] py-0 px-1.5">LIVE</Badge>
                                                         )}
                                                     </div>
-                                                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                                                        <span className="text-slate-400">{getRelativeDate(broadcast.timestamp_start)}</span>
-                                                        <span>•</span>
-                                                        <span>{formatTimeRange(broadcast.timestamp_start, broadcast.timestamp_end)}</span>
-                                                    </div>
+                                                    <p className="text-xs text-slate-500 mt-0.5">
+                                                        {getRelativeDate(broadcast.timestamp_start)}
+                                                        {' · '}
+                                                        {formatTimeRange(broadcast.timestamp_start, broadcast.timestamp_end)}
+                                                    </p>
                                                 </div>
                                             </div>
-                                            <div className="text-right space-y-1">
-                                                <Badge 
-                                                    variant="outline" 
-                                                    className={isOngoing 
-                                                        ? 'border-emerald-600 text-emerald-400' 
-                                                        : 'border-slate-700 text-slate-400'
-                                                    }
-                                                >
-                                                    <Clock className="h-3 w-3 mr-1" />
+
+                                            {/* Right: Duration + Date */}
+                                            <div className="flex items-center gap-2 sm:flex-col sm:items-end pl-13 sm:pl-0">
+                                                <Badge variant="outline" className={`text-[10px] ${
+                                                    isOngoing ? 'border-emerald-600/50 text-emerald-400' : 'border-slate-700 text-slate-500'
+                                                }`}>
+                                                    <Clock className="h-2.5 w-2.5 mr-1" />
                                                     {formatDuration(broadcast.timestamp_start, broadcast.timestamp_end)}
                                                 </Badge>
                                                 {broadcast.timestamp_start && (
-                                                    <p className="text-xs text-slate-600">
+                                                    <p className="text-[10px] text-slate-600">
                                                         {formatDate(broadcast.timestamp_start)}
                                                     </p>
                                                 )}
                                             </div>
                                         </div>
-                                    )
-                                })}
-                            </div>
-                        </CardContent>
-                    </Card>
+                                    </CardContent>
+                                </Card>
+                            )
+                        })}
+                    </div>
                 )}
             </TabsContent>
         </Tabs>
