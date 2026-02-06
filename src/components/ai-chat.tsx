@@ -70,7 +70,7 @@ function formatMarkdown(text: string): string {
         }
         // Markdown table: | col1 | col2 |
         if (line.trim().startsWith('|') && line.trim().endsWith('|') && line.includes('|')) {
-            const tableRows: string[] = []
+            const tableRows: string[][] = []
             while (i < lines.length) {
                 const row = lines[i]
                 if (!row.trim().startsWith('|') || !row.trim().endsWith('|')) break
