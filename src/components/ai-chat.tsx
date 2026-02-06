@@ -9,15 +9,127 @@ interface Message {
     content: string
 }
 
+function parseTableRow(line: string): string[] {
+    const cells: string[] = []
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return []
+    const parts = trimmed.slice(1, -1).split('|').map((p) => p.trim())
+    return parts
+}
+
+function isTableSeparator(line: string): boolean {
+    return /^\s*\|[\s\-:]+\|\s*$/.test(line) || /^\s*\|[\s\-|:]+\|\s*$/.test(line)
+}
+
 function formatMarkdown(text: string): string {
-    // Simple markdown-to-HTML for bold, italic, lists, code
-    return text
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/`([^`]+)`/g, '<code class="bg-slate-800 px-1 py-0.5 rounded text-xs text-indigo-300">$1</code>')
-        .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc text-slate-300">$1</li>')
-        .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 list-decimal text-slate-300">$2</li>')
-        .replace(/\n/g, '<br/>')
+    if (!text?.trim()) return ''
+    // Escape HTML to prevent XSS, then apply markdown
+    const escape = (s: string) =>
+        s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    let out = escape(text)
+    // Bold **text** (before single * so we don't break)
+    out = out.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>')
+    // Italic *text*
+    out = out.replace(/\*([^\*]+?)\*/g, '<em>$1</em>')
+    // Inline code `code`
+    out = out.replace(/`([^`]+)`/g, '<code>$1</code>')
+    // Link block: Open in new tab + Copy (escape URL for HTML attributes)
+    out = out.replace(/https?:\/\/[^\s<"]+/g, (url) => {
+        const href = url.replace(/&amp;/g, '&')
+        const safe = href.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+        return (
+            '<span class="ai-link-wrap">' +
+            '<a href="' + safe + '" target="_blank" rel="noopener noreferrer" class="ai-link">Open in new tab</a>' +
+            '<button type="button" class="ai-copy-link" data-url="' + safe + '">Copy</button>' +
+            '</span>'
+        )
+    })
+    const lines = out.split('\n')
+    const result: string[] = []
+    let i = 0
+    while (i < lines.length) {
+        const line = lines[i]
+        // Headings
+        const h3 = /^###\s+(.+)$/.exec(line)
+        const h2 = /^##\s+(.+)$/.exec(line)
+        const h1 = /^#\s+(.+)$/.exec(line)
+        if (h3) {
+            result.push('<h3 class="ai-h3">' + h3[1] + '</h3>')
+            i++
+            continue
+        }
+        if (h2) {
+            result.push('<h2 class="ai-h2">' + h2[1] + '</h2>')
+            i++
+            continue
+        }
+        if (h1) {
+            result.push('<h1 class="ai-h1">' + h1[1] + '</h1>')
+            i++
+            continue
+        }
+        // Markdown table: | col1 | col2 |
+        if (line.trim().startsWith('|') && line.trim().endsWith('|') && line.includes('|')) {
+            const tableRows: string[] = []
+            while (i < lines.length) {
+                const row = lines[i]
+                if (!row.trim().startsWith('|') || !row.trim().endsWith('|')) break
+                if (isTableSeparator(row)) {
+                    i++
+                    continue
+                }
+                const cells = parseTableRow(row)
+                if (cells.length === 0) break
+                tableRows.push(cells)
+                i++
+            }
+            if (tableRows.length > 0) {
+                const thead = tableRows[0].map((c) => '<th class="ai-th">' + c + '</th>').join('')
+                const body = tableRows.slice(1).map(
+                    (row) => '<tr>' + row.map((c) => '<td class="ai-td">' + c + '</td>').join('') + '</tr>'
+                ).join('')
+                result.push(
+                    '<div class="ai-table-wrap"><table class="ai-table">' +
+                    '<thead><tr>' + thead + '</tr></thead><tbody>' + body + '</tbody></table></div>'
+                )
+            }
+            continue
+        }
+        // Bullet list
+        const bulletMatch = /^\s*[\-\*]\s+.+$/.test(line)
+        const numMatch = /^\s*\d+\.\s+.+$/.test(line)
+        if (bulletMatch) {
+            const items: string[] = []
+            while (i < lines.length && /^\s*[\-\*]\s+.+$/.test(lines[i])) {
+                items.push('<li>' + lines[i].replace(/^\s*[\-\*]\s+/, '') + '</li>')
+                i++
+            }
+            result.push('<ul class="ai-list">' + items.join('') + '</ul>')
+            continue
+        }
+        if (numMatch) {
+            const items: string[] = []
+            while (i < lines.length && /^\s*\d+\.\s+.+$/.test(lines[i])) {
+                items.push('<li>' + lines[i].replace(/^\s*\d+\.\s+/, '') + '</li>')
+                i++
+            }
+            result.push('<ol class="ai-list">' + items.join('') + '</ol>')
+            continue
+        }
+        result.push(line)
+        i++
+    }
+    out = result.join('\n')
+    // Paragraphs and line breaks
+    out = out.replace(/\n\n+/g, '</p><p class="ai-p">')
+    out = out.replace(/\n/g, '<br/>')
+    const trimmed = out.trim()
+    if (!trimmed) return ''
+    if (!trimmed.startsWith('<p') && !trimmed.startsWith('<ul') && !trimmed.startsWith('<ol') &&
+        !trimmed.startsWith('<h') && !trimmed.startsWith('<div')) {
+        out = '<p class="ai-p">' + out + '</p>'
+    }
+    return out
 }
 
 export function AIChat() {
@@ -87,6 +199,23 @@ export function AIChat() {
     const clearChat = () => {
         setMessages([])
         setError(null)
+    }
+
+    const handleMessageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        const btn = (e.target as HTMLElement).closest('.ai-copy-link')
+        if (!btn || !(btn instanceof HTMLElement)) return
+        const url = btn.getAttribute('data-url')
+        if (!url) return
+        const decoded = url.replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+        void navigator.clipboard.writeText(decoded).then(() => {
+            const prev = btn.textContent
+            btn.textContent = 'Copied!'
+            btn.classList.add('ai-copy-done')
+            setTimeout(() => {
+                btn.textContent = prev
+                btn.classList.remove('ai-copy-done')
+            }, 2000)
+        })
     }
 
     return (
@@ -180,7 +309,7 @@ export function AIChat() {
                                     </div>
                                 )}
                                 <div
-                                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                                    className={`min-w-0 max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                                         msg.role === 'user'
                                             ? 'bg-indigo-600 text-white rounded-br-md'
                                             : 'bg-slate-800/70 text-slate-200 rounded-bl-md border border-slate-700/50'
@@ -188,7 +317,8 @@ export function AIChat() {
                                 >
                                     {msg.role === 'assistant' ? (
                                         <div
-                                            className="prose-sm [&_strong]:text-white [&_em]:text-slate-300 [&_code]:text-indigo-300 [&_li]:text-slate-300"
+                                            className="ai-message-content break-words break-all text-slate-200 text-sm leading-relaxed [&_strong]:font-bold [&_strong]:text-white [&_em]:italic [&_em]:text-slate-300 [&_code]:font-mono [&_code]:text-xs [&_code]:bg-slate-700/80 [&_code]:text-indigo-300 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:break-all [&_.ai-link-wrap]:inline-flex [&_.ai-link-wrap]:flex-wrap [&_.ai-link-wrap]:items-center [&_.ai-link-wrap]:gap-2 [&_.ai-link-wrap]:my-1 [&_.ai-link]:text-indigo-400 [&_.ai-link]:underline [&_.ai-link]:hover:text-indigo-300 [&_.ai-copy-link]:text-xs [&_.ai-copy-link]:px-2 [&_.ai-copy-link]:py-1 [&_.ai-copy-link]:rounded [&_.ai-copy-link]:bg-slate-600 [&_.ai-copy-link]:text-slate-200 [&_.ai-copy-link]:border [&_.ai-copy-link]:border-slate-500 [&_.ai-copy-link]:cursor-pointer [&_.ai-copy-link]:hover:bg-slate-500 [&_.ai-copy-done]:bg-emerald-600/80 [&_.ai-copy-done]:border-emerald-500 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_.ai-p]:mb-2 [&_.ai-p:last-child]:mb-0 [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:pl-5 [&_ol]:list-decimal [&_li]:my-0.5 [&_li]:text-slate-300 [&_.ai-h1]:text-lg [&_.ai-h1]:font-bold [&_.ai-h1]:text-white [&_.ai-h1]:mt-3 [&_.ai-h1]:mb-2 [&_.ai-h2]:text-base [&_.ai-h2]:font-bold [&_.ai-h2]:text-white [&_.ai-h2]:mt-3 [&_.ai-h2]:mb-1.5 [&_.ai-h3]:text-sm [&_.ai-h3]:font-semibold [&_.ai-h3]:text-slate-100 [&_.ai-h3]:mt-3 [&_.ai-h3]:mb-1 [&_.ai-table-wrap]:my-2 [&_.ai-table-wrap]:overflow-x-auto [&_.ai-table]:w-full [&_.ai-table]:border-collapse [&_.ai-table]:text-xs [&_.ai-th]:border [&_.ai-th]:border-slate-600 [&_.ai-th]:bg-slate-700/80 [&_.ai-th]:text-left [&_.ai-th]:text-slate-200 [&_.ai-th]:font-semibold [&_.ai-th]:px-2 [&_.ai-th]:py-1.5 [&_.ai-td]:border [&_.ai-td]:border-slate-600 [&_.ai-td]:px-2 [&_.ai-td]:py-1.5 [&_.ai-td]:text-slate-300"
+                                            onClick={handleMessageClick}
                                             dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.content) }}
                                         />
                                     ) : (

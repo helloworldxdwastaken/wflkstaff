@@ -96,26 +96,38 @@ async function executeTool(name: string, args: any): Promise<string> {
   try {
     switch (name) {
       case 'search_resources': {
-        const query = (args.query || '').toLowerCase();
+        const rawQuery = (args.query || '').toLowerCase().trim();
         const items = await prisma.infoItem.findMany({
           orderBy: { createdAt: 'desc' },
         });
-        const filtered = items.filter(
-          (item) =>
-            item.title.toLowerCase().includes(query) ||
-            (item.description && item.description.toLowerCase().includes(query)) ||
-            item.type.toLowerCase().includes(query)
-        );
+        // Match full query OR any significant word (so "guide about how to stream" matches "Streaming Guide")
+        const stopWords = new Set(['the', 'a', 'an', 'how', 'to', 'for', 'on', 'in', 'at', 'is', 'it', 'and', 'or', 'about', 'need', 'get', 'find', 'want']);
+        const words = rawQuery.split(/\s+/).filter((w) => w.length > 1 && !stopWords.has(w));
+        const filtered = items.filter((item) => {
+          const title = item.title.toLowerCase();
+          const desc = (item.description || '').toLowerCase();
+          if (title.includes(rawQuery) || desc.includes(rawQuery)) return true;
+          return words.some((word) => title.includes(word) || desc.includes(word));
+        });
         if (filtered.length === 0) return 'No resources found matching that query.';
         return JSON.stringify(
-          filtered.slice(0, 15).map((item) => ({
-            title: item.title,
-            description: item.description,
-            type: item.type,
-            ...(item.type !== 'SECRET'
-              ? { content: item.content }
-              : { note: 'This is a credential/secret - content hidden for security.' }),
-          }))
+          filtered.slice(0, 15).map((item) => {
+            if (item.type === 'SECRET') {
+              return {
+                title: item.title,
+                type: 'SECRET',
+                note: 'Credentials/secrets are on the Secrets page. Do not reveal any secret content.',
+              };
+            }
+            const isLink = item.type === 'LINK' || (item.content && /^https?:\/\//i.test(item.content));
+            return {
+              title: item.title,
+              description: item.description,
+              type: item.type,
+              content: item.content,
+              ...(isLink ? { link: item.content } : {}),
+            };
+          })
         );
       }
 
@@ -319,8 +331,9 @@ Your job is to help staff find information quickly. You can:
 Rules:
 - Be concise and friendly. Use short, clear answers.
 - Always use your tools to fetch real data before answering - never make up information.
-- If you don't find what the user is looking for, say so and suggest what they could try.
-- Never reveal passwords, secure words, or secret content - only mention that the resource exists.
+- **When search_resources returns matching resources (with link or content):** Give the user the resource directly. For links, say "Here's the link:" and include the URL so they can click it. For files or text resources, share the title and the content or say where to find it. Never say "I wasn't able to locate it" or only suggest manual search steps when the tool actually returned results—use what was returned to give them the link or content.
+- **When the user asks for secrets, credentials, passwords, AzuraCast credentials, or TMG credentials:** Never reveal any secret content. Reply exactly: "You can see the TMG AzuraCast credentials on the Secrets page if you have access to it. If not, I'm afraid you don't have the right privileges."
+- If search_resources returns no results, then say you couldn't find it and suggest they check the Guidelines folder or search with different keywords.
 - You must ONLY answer questions related to WFLK, the radio station, the staff portal, or its features. If someone asks something unrelated (general knowledge, coding help, math, trivia, etc.), politely decline and say: "I can only help with WFLK-related questions! Ask me about schedules, analytics, resources, polls, or anything about the station."
 - If someone asks who made you or who built this portal, say: "I was built by **Tokyo**! If you need to reach him, his Discord is **tokyo_houseparty**."
 - Format your responses with markdown when helpful (bold, lists, etc).
@@ -329,7 +342,8 @@ Rules:
 
 // --- Groq API helper ---
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+// Use GPT-OSS 120B: Groq's recommended model for local tool calling (proper tool_calls format)
+const GROQ_MODEL = 'openai/gpt-oss-120b';
 
 interface GroqMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
@@ -338,11 +352,16 @@ interface GroqMessage {
   tool_call_id?: string;
 }
 
-async function callGroq(messages: GroqMessage[], apiKey: string, useTools: boolean = true) {
+async function callGroq(
+  messages: GroqMessage[],
+  apiKey: string,
+  opts: { useTools?: boolean; temperature?: number } = {}
+) {
+  const { useTools = true, temperature = 0.3 } = opts;
   const body: any = {
     model: GROQ_MODEL,
     messages,
-    temperature: 0.3,
+    temperature,
     max_tokens: 2048,
   };
   if (useTools) {
@@ -403,8 +422,28 @@ export async function POST(request: NextRequest) {
 
     // Tool-calling loop (max 5 iterations)
     let iterations = 0;
+    const temperatures = [0.3, 0.2, 0.1]; // retry with lower temp on tool validation failure
+
     while (iterations < 5) {
-      const data = await callGroq(groqMessages, apiKey);
+      let data: any;
+      let lastErr: Error | null = null;
+      for (let t = 0; t < temperatures.length; t++) {
+        try {
+          data = await callGroq(groqMessages, apiKey, {
+            useTools: true,
+            temperature: temperatures[t],
+          });
+          lastErr = null;
+          break;
+        } catch (err: any) {
+          lastErr = err;
+          const isToolValidation =
+            err?.message?.includes('400') && err?.message?.includes('tool call validation failed');
+          if (isToolValidation && t < temperatures.length - 1) continue;
+          throw err;
+        }
+      }
+      if (lastErr) throw lastErr;
       const choice = data.choices?.[0];
       if (!choice) throw new Error('No response from AI');
 
@@ -444,7 +483,7 @@ export async function POST(request: NextRequest) {
     }
 
     // If we exhausted iterations, do one final call without tools
-    const finalData = await callGroq(groqMessages, apiKey, false);
+    const finalData = await callGroq(groqMessages, apiKey, { useTools: false });
     const finalText = finalData.choices?.[0]?.message?.content || 'Sorry, I could not process that request.';
     return NextResponse.json({ message: finalText });
   } catch (error: any) {
