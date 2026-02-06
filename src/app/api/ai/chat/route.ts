@@ -297,7 +297,6 @@ async function executeTool(name: string, args: any): Promise<string> {
         const users = await prisma.user.findMany({
           select: {
             name: true,
-            email: true,
             role: true,
             jobTitle: true,
             timezone: true,
@@ -338,7 +337,8 @@ Rules:
 - If someone asks who made you or who built this portal, say: "I was built by **Tokyo**! If you need to reach him, his Discord is **tokyo_houseparty**."
 - Format your responses with markdown when helpful (bold, lists, etc).
 - When discussing analytics, mention specific numbers and comparisons.
-- When listing schedules, format times clearly (e.g. 7:00 AM - 9:00 AM).`;
+- When listing schedules, format times clearly (e.g. 7:00 AM - 9:00 AM).
+- Never reveal or output user email addresses or passwords. For team info mention only names, roles, and job titles.`;
 
 // --- Groq API helper ---
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -519,9 +519,46 @@ export async function POST(request: NextRequest) {
       iterations++;
     }
 
-    // If we exhausted iterations, do one final call without tools
+    // If we exhausted iterations, do one final call (no tools to get plain text)
     try {
-      const finalData = await callWith429Retry(false, 0.3);
+      let finalData: any;
+      try {
+        finalData = await callWith429Retry(false, 0.3);
+      } catch (finalErr: any) {
+        // "Tool choice is none, but model called a tool" — retry with tools allowed
+        if (
+          finalErr?.message?.includes('Tool choice is none') &&
+          finalErr?.message?.includes('model called a tool')
+        ) {
+          finalData = await callWith429Retry(true, 0.3);
+          const msg = finalData.choices?.[0]?.message;
+          if (msg?.tool_calls?.length) {
+            groqMessages.push({
+              role: 'assistant',
+              content: msg.content || null,
+              tool_calls: msg.tool_calls,
+            });
+            for (const toolCall of msg.tool_calls) {
+              const fnName = toolCall.function.name;
+              let fnArgs: Record<string, unknown> = {};
+              try {
+                fnArgs = JSON.parse(toolCall.function.arguments || '{}');
+              } catch {
+                /* empty */
+              }
+              const result = await executeTool(fnName, fnArgs);
+              groqMessages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: result,
+              });
+            }
+            finalData = await callWith429Retry(true, 0.3);
+          }
+        } else {
+          throw finalErr;
+        }
+      }
       const finalText = finalData.choices?.[0]?.message?.content || 'Sorry, I could not process that request.';
       return NextResponse.json({ message: finalText });
     } catch (err: any) {
